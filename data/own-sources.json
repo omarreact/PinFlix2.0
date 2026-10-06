@@ -1,0 +1,6 @@
+{
+  "_readme": "Add sources you own or are licensed to stream. Keys: 'movie:<tmdbId>', 'tv:<tmdbId>' or 'tv:<tmdbId>:s<season>e<episode>'. Values: array of { label, url } where url is an .m3u8 (HLS) or .mp4 link on your CDN.",
+  "movie:0": [
+    { "label": "Example (replace)", "url": "https://example.com/video/master.m3u8" }
+  ]
+}
