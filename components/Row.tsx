@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import MovieCard, { CardSkeleton, type CardVariant } from "./MovieCard";
 import { tmdb, type MediaType, type Title } from "@/lib/tmdb";
 
@@ -38,26 +38,27 @@ export default function Row({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);
 
-  // fade-in on scroll
   useEffect(() => {
     const el = section.current;
     if (!el) return;
+
     const io = new IntersectionObserver(
-      ([e]) => {
-        if (e.isIntersecting) {
+      ([entry]) => {
+        if (entry.isIntersecting) {
           el.classList.add("is-visible");
           io.disconnect();
         }
       },
-      { threshold: 0.1 },
+      { threshold: 0.08 },
     );
+
     io.observe(el);
     return () => io.disconnect();
   }, []);
 
   const scrollBy = (dir: 1 | -1) =>
     scroller.current?.scrollBy({
-      left: dir * scroller.current.clientWidth * 0.8,
+      left: dir * scroller.current.clientWidth * 0.82,
       behavior: "smooth",
     });
 
@@ -65,6 +66,7 @@ export default function Row({
     const s = scroller.current!;
     drag.current = { down: true, x: e.pageX, left: s.scrollLeft, moved: false };
   };
+
   const onMove = (e: React.MouseEvent) => {
     const d = drag.current;
     if (!d.down) return;
@@ -72,7 +74,10 @@ export default function Row({
     if (Math.abs(dx) > 5) d.moved = true;
     scroller.current!.scrollLeft = d.left - dx;
   };
-  const end = () => (drag.current.down = false);
+
+  const end = () => {
+    drag.current.down = false;
+  };
 
   if (error) return null;
 
@@ -81,26 +86,35 @@ export default function Row({
     .slice(0, limit ?? 20);
 
   return (
-    <section ref={section} className="reveal group/row relative">
-      <div className="mb-1 flex items-end justify-between px-4 sm:px-8">
-        <h2 className="text-sm font-bold sm:text-base">{title}</h2>
+    <section ref={section} className="reveal group/row relative py-1 sm:py-2">
+      <div className="mb-0 flex items-end justify-between gap-4 px-4 sm:px-8">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="h-5 w-1 shrink-0 rounded-full bg-accent shadow-[0_0_18px_rgba(117,242,60,0.22)]" />
+          <h2 className="truncate font-display text-base font-semibold tracking-[-0.03em] text-white sm:text-lg">
+            {title}
+          </h2>
+        </div>
+
         {href && (
           <Link
             href={href}
-            className="text-xs text-zinc-400 transition hover:text-accent"
+            className="flex shrink-0 items-center gap-1 text-[11px] font-bold text-white/40 transition hover:text-accent"
           >
-            All {type === "tv" ? "Shows" : "Movies"} ›
+            View all
+            <ArrowRight size={13} />
           </Link>
         )}
       </div>
+
       <div className="relative">
         <button
           aria-label="Scroll left"
           onClick={() => scrollBy(-1)}
-          className="glass absolute left-2 top-[35%] z-40 hidden h-10 w-10 items-center justify-center rounded-full opacity-0 transition group-hover/row:opacity-100 hover:bg-accent hover:text-black md:flex"
+          className="glass absolute left-3 top-[38%] z-40 hidden h-10 w-10 items-center justify-center rounded-full text-white/80 opacity-0 transition group-hover/row:opacity-100 hover:border-accent/40 hover:bg-accent hover:text-[#071005] md:flex"
         >
-          <ChevronLeft />
+          <ChevronLeft size={19} />
         </button>
+
         <div
           ref={scroller}
           onMouseDown={onDown}
@@ -114,7 +128,7 @@ export default function Row({
               drag.current.moved = false;
             }
           }}
-          className="no-scrollbar flex cursor-grab gap-4 overflow-x-auto px-4 py-4 active:cursor-grabbing sm:px-8"
+          className="no-scrollbar flex cursor-grab gap-3.5 overflow-x-auto px-4 py-4 active:cursor-grabbing sm:gap-4 sm:px-8"
         >
           {items
             ? shown.map((i, n) => (
@@ -130,12 +144,13 @@ export default function Row({
                 <CardSkeleton key={i} variant={variant} />
               ))}
         </div>
+
         <button
           aria-label="Scroll right"
           onClick={() => scrollBy(1)}
-          className="glass absolute right-2 top-[35%] z-40 hidden h-10 w-10 items-center justify-center rounded-full opacity-0 transition group-hover/row:opacity-100 hover:bg-accent hover:text-black md:flex"
+          className="glass absolute right-3 top-[38%] z-40 hidden h-10 w-10 items-center justify-center rounded-full text-white/80 opacity-0 transition group-hover/row:opacity-100 hover:border-accent/40 hover:bg-accent hover:text-[#071005] md:flex"
         >
-          <ChevronRight />
+          <ChevronRight size={19} />
         </button>
       </div>
     </section>

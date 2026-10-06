@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Menu, Search, User, X } from "lucide-react";
 import { img, tmdb, titleOf, yearOf, type Title } from "@/lib/tmdb";
 
@@ -14,15 +14,17 @@ export const LINKS = [
 
 export function Logo() {
   return (
-    <Link href="/" className="flex items-center gap-2">
-      <span className="flex h-7 w-7 items-center justify-center rounded-md bg-accent text-black">
-        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current">
+    <Link href="/" className="group flex items-center gap-2.5" aria-label="PinFlix home">
+      <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-accent text-[#071005] shadow-[0_0_26px_rgba(117,242,60,0.16)] transition group-hover:scale-105">
+        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
           <path d="M8 5v14l11-7z" />
         </svg>
       </span>
-      <span className="font-display text-lg font-bold tracking-tight">
-        pinflix
-        <sup className="ml-0.5 text-[9px] text-accent">2.0</sup>
+      <span className="font-display text-[17px] font-bold tracking-[-0.045em] text-white">
+        PinFlix
+        <sup className="ml-1 align-super text-[8px] font-extrabold tracking-normal text-accent">
+          2.0
+        </sup>
       </span>
     </Link>
   );
@@ -36,9 +38,10 @@ export default function Navbar() {
   const [focus, setFocus] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    const on = () => setSolid(window.scrollY > 40);
+    const on = () => setSolid(window.scrollY > 24);
     on();
     window.addEventListener("scroll", on, { passive: true });
     return () => window.removeEventListener("scroll", on);
@@ -52,7 +55,11 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    if (q.trim().length < 2) return;
+    if (q.trim().length < 2) {
+      setResults([]);
+      return;
+    }
+
     const ac = new AbortController();
     const t = setTimeout(() => {
       tmdb<{ results: Title[] }>("/search/multi", { query: q }, ac.signal)
@@ -65,6 +72,7 @@ export default function Navbar() {
         )
         .catch(() => {});
     }, 300);
+
     return () => {
       clearTimeout(t);
       ac.abort();
@@ -79,47 +87,59 @@ export default function Navbar() {
     router.push(`/title/${t.media_type}/${t.id}`);
   };
 
+  const active = (href: string) =>
+    href === "/" ? pathname === "/" : pathname.startsWith(href);
+
   return (
     <nav
-      className={`fixed inset-x-0 top-0 z-50 transition-all duration-500 ${
+      className={`fixed inset-x-0 top-0 z-50 border-b transition-all duration-300 ${
         solid || menu
-          ? "bg-[#0b0b0b]/95 shadow-lg shadow-black/50 backdrop-blur-md"
-          : "bg-gradient-to-b from-black/80 to-transparent"
+          ? "border-white/[0.07] bg-[#080a08]/88 shadow-[0_12px_40px_rgba(0,0,0,0.28)] backdrop-blur-xl"
+          : "border-transparent bg-gradient-to-b from-black/70 via-black/30 to-transparent"
       }`}
     >
-      <div className="flex items-center gap-6 px-4 py-3 sm:px-8">
+      <div className="mx-auto flex h-[68px] max-w-[1600px] items-center gap-7 px-4 sm:px-8">
         <Logo />
-        <ul className="hidden items-center gap-6 text-xs font-semibold md:flex">
+
+        <ul className="hidden items-center gap-1 rounded-full border border-white/[0.06] bg-white/[0.035] p-1 text-xs font-bold text-white/70 md:flex">
           {LINKS.map((l) => (
             <li key={l.href}>
-              <Link href={l.href} className="transition hover:text-accent">
+              <Link
+                href={l.href}
+                className={`block rounded-full px-4 py-2 transition ${
+                  active(l.href)
+                    ? "bg-white/10 text-white"
+                    : "hover:bg-white/[0.06] hover:text-white"
+                }`}
+              >
                 {l.label}
               </Link>
             </li>
           ))}
         </ul>
 
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2.5">
           <div ref={wrap} className="relative hidden sm:block">
-            <div className="flex w-64 items-center gap-2 rounded-lg border border-white/20 bg-black/40 px-3 py-2 backdrop-blur focus-within:border-accent">
-              <Search size={16} />
+            <div className="flex w-60 items-center gap-2.5 rounded-full border border-white/10 bg-black/30 px-4 py-2.5 text-white/70 backdrop-blur transition focus-within:border-accent/60 focus-within:bg-black/50 focus-within:text-white lg:w-72">
+              <Search size={15} strokeWidth={2.2} />
               <input
                 value={q}
                 onFocus={() => setFocus(true)}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Find movies, TV shows…"
-                className="w-full bg-transparent text-xs outline-none placeholder:text-zinc-400"
+                placeholder="Search movies & shows"
+                className="w-full bg-transparent text-xs font-medium outline-none placeholder:text-white/35"
               />
             </div>
+
             {focus && shown.length > 0 && (
-              <ul className="glass absolute right-0 top-11 w-80 overflow-hidden rounded-xl">
+              <ul className="glass absolute right-0 top-12 w-80 overflow-hidden rounded-2xl p-1">
                 {shown.map((r) => (
                   <li key={`${r.media_type}${r.id}`}>
                     <button
                       onClick={() => go(r)}
-                      className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-white/10"
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-white/[0.07]"
                     >
-                      <div className="h-14 w-10 shrink-0 overflow-hidden rounded bg-zinc-800">
+                      <div className="h-14 w-10 shrink-0 overflow-hidden rounded-md bg-zinc-800">
                         {r.poster_path && (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -130,11 +150,11 @@ export default function Navbar() {
                         )}
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">
+                        <p className="truncate text-sm font-bold text-white">
                           {titleOf(r)}
                         </p>
-                        <p className="text-xs text-zinc-400">
-                          {r.media_type === "tv" ? "TV" : "Movie"} · {yearOf(r)}
+                        <p className="mt-0.5 text-[11px] font-medium text-white/45">
+                          {r.media_type === "tv" ? "TV Series" : "Movie"} · {yearOf(r)}
                         </p>
                       </div>
                     </button>
@@ -143,58 +163,71 @@ export default function Navbar() {
               </ul>
             )}
           </div>
+
           <button
             aria-label="Profile"
-            className="hidden h-8 w-8 items-center justify-center rounded-full hover:bg-white/10 sm:flex"
+            className="hidden h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white/70 transition hover:bg-white/10 hover:text-white sm:flex"
           >
-            <User size={18} />
+            <User size={17} />
           </button>
+
           <Link
             href="/browse/movie"
-            className="rounded-lg bg-accent px-4 py-2 text-xs font-bold text-black transition hover:brightness-110"
+            className="rounded-full bg-accent px-4 py-2.5 text-[11px] font-extrabold text-[#071005] transition hover:-translate-y-0.5 hover:bg-[#91ff5d]"
           >
-            Subscribe
+            Explore
           </Link>
+
           <button
             aria-label="Menu"
             onClick={() => setMenu((m) => !m)}
-            className="md:hidden"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] md:hidden"
           >
-            {menu ? <X /> : <Menu />}
+            {menu ? <X size={18} /> : <Menu size={18} />}
           </button>
         </div>
       </div>
 
       {menu && (
-        <div className="animate-fade-in space-y-4 border-t border-white/10 px-4 py-4 md:hidden">
-          <div className="flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2">
-            <Search size={16} />
+        <div className="animate-fade-in border-t border-white/[0.07] bg-[#080a08]/96 px-4 pb-5 pt-4 backdrop-blur-xl md:hidden">
+          <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5">
+            <Search size={15} />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Find movies, TV shows…"
-              className="w-full bg-transparent text-sm outline-none"
+              placeholder="Search movies & shows"
+              className="w-full bg-transparent text-sm outline-none placeholder:text-white/35"
             />
           </div>
-          {shown.map((r) => (
-            <button
-              key={`${r.media_type}${r.id}`}
-              onClick={() => go(r)}
-              className="block w-full truncate text-left text-sm text-zinc-300"
-            >
-              {titleOf(r)} · {yearOf(r)}
-            </button>
-          ))}
-          {LINKS.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              onClick={() => setMenu(false)}
-              className="block text-sm font-semibold"
-            >
-              {l.label}
-            </Link>
-          ))}
+
+          {shown.length > 0 && (
+            <div className="mb-4 space-y-1 rounded-xl border border-white/[0.06] bg-white/[0.025] p-1.5">
+              {shown.slice(0, 4).map((r) => (
+                <button
+                  key={`${r.media_type}${r.id}`}
+                  onClick={() => go(r)}
+                  className="block w-full truncate rounded-lg px-3 py-2 text-left text-xs font-semibold text-white/75 hover:bg-white/[0.06]"
+                >
+                  {titleOf(r)} · {yearOf(r)}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="grid gap-1">
+            {LINKS.map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                onClick={() => setMenu(false)}
+                className={`rounded-xl px-3 py-3 text-sm font-bold transition ${
+                  active(l.href) ? "bg-white/[0.08] text-white" : "text-white/70"
+                }`}
+              >
+                {l.label}
+              </Link>
+            ))}
+          </div>
         </div>
       )}
     </nav>

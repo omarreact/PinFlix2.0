@@ -1,49 +1,39 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Globe, Mail, Rss } from "lucide-react";
+import { ArrowUpRight, Globe, Mail, Rss } from "lucide-react";
 import { Logo } from "./Navbar";
-import { GENRE_OPTIONS, img, tmdb, type Title } from "@/lib/tmdb";
+import { GENRE_OPTIONS } from "@/lib/tmdb";
 
 export function CtaBanner() {
-  const [posters, setPosters] = useState<string[]>([]);
-  useEffect(() => {
-    const ac = new AbortController();
-    tmdb<{ results: Title[] }>("/trending/all/week", {}, ac.signal)
-      .then((d) =>
-        setPosters(
-          d.results.filter((r) => r.poster_path).map((r) => r.poster_path!),
-        ),
-      )
-      .catch(() => {});
-    return () => ac.abort();
-  }, []);
-
   return (
-    <section className="relative mx-4 overflow-hidden rounded-xl bg-zinc-950 sm:mx-8">
-      <div className="absolute inset-0 grid grid-cols-5 gap-1 opacity-30 sm:grid-cols-8 lg:grid-cols-10">
-        {posters.slice(0, 20).map((p) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img key={p} src={img(p, "w154")!} alt="" className="h-full w-full object-cover" />
-        ))}
-      </div>
-      <div className="absolute inset-0 bg-gradient-to-r from-[#1c4a0c] via-[#0a1f06]/80 to-black/70" />
-      <div className="relative px-6 py-14 text-center sm:py-20">
-        <h2 className="font-display text-2xl font-bold uppercase leading-tight sm:text-4xl">
-          Start your free
-          <br />
-          trial today
-        </h2>
-        <p className="mx-auto mt-3 max-w-md text-xs text-zinc-300">
-          Subscribe for {"$9.99"} / month. Cancel anytime.
-        </p>
-        <Link
-          href="/browse/movie"
-          className="mt-6 inline-block rounded-lg bg-accent px-6 py-3 text-xs font-bold text-black transition hover:brightness-110"
-        >
-          Start free trial
-        </Link>
+    <section className="mx-4 overflow-hidden rounded-[28px] border border-white/[0.08] bg-[radial-gradient(circle_at_20%_20%,rgba(117,242,60,0.16),transparent_34%),linear-gradient(135deg,#111811_0%,#0b0d0b_45%,#111111_100%)] px-6 py-10 shadow-[0_24px_70px_rgba(0,0,0,0.3)] sm:mx-8 sm:px-10 sm:py-14">
+      <div className="mx-auto flex max-w-6xl flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.26em] text-accent">
+            Your next watch
+          </p>
+          <h2 className="mt-3 max-w-2xl font-display text-2xl font-semibold leading-tight tracking-[-0.045em] text-white sm:text-4xl">
+            Find something worth pressing play on.
+          </h2>
+          <p className="mt-3 max-w-xl text-sm font-medium leading-6 text-white/48">
+            Browse curated movies and TV shows with a faster, cleaner PinFlix experience.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href="/browse/movie"
+            className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-3 text-xs font-extrabold text-[#071005] transition hover:-translate-y-0.5 hover:bg-[#91ff5d]"
+          >
+            Browse movies
+            <ArrowUpRight size={14} />
+          </Link>
+          <Link
+            href="/browse/tv"
+            className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.05] px-5 py-3 text-xs font-bold text-white/78 transition hover:bg-white/10 hover:text-white"
+          >
+            TV shows
+          </Link>
+        </div>
       </div>
     </section>
   );
@@ -53,30 +43,40 @@ export default function Footer() {
   const genres = GENRE_OPTIONS.filter((g) =>
     ["10749", "18", "10751", "35", "28", "12", "27", "53", "878"].includes(g.id),
   );
+
   return (
-    <footer className="mt-16 bg-[#111] px-4 pt-12 sm:px-8">
+    <footer className="mt-16 border-t border-white/[0.07] bg-[#080a08] px-4 pt-12 sm:px-8">
       <div className="mx-auto grid max-w-7xl gap-10 pb-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_1.4fr_1fr_1fr]">
-        <div className="space-y-4">
+        <div className="space-y-5">
           <Logo />
-          <p className="text-xs font-semibold">Connect with us</p>
-          <div className="flex gap-3 text-zinc-300">
-            <Globe size={16} />
-            <Mail size={16} />
-            <Rss size={16} />
+          <p className="max-w-xs text-xs font-medium leading-5 text-white/40">
+            A focused movie and TV discovery experience with fast browsing and clean playback flows.
+          </p>
+          <div className="flex gap-2 text-white/45">
+            {[Globe, Mail, Rss].map((Icon, i) => (
+              <span
+                key={i}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.07] bg-white/[0.03]"
+              >
+                <Icon size={14} />
+              </span>
+            ))}
           </div>
-          <p className="text-xs text-zinc-500">
+          <p className="text-[11px] font-medium text-white/28">
             Privacy Policy · Terms of Service
           </p>
         </div>
 
         <div>
-          <h4 className="mb-3 text-sm font-bold">Genres</h4>
-          <ul className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs text-zinc-400">
+          <h4 className="mb-4 text-xs font-extrabold uppercase tracking-[0.16em] text-white/75">
+            Genres
+          </h4>
+          <ul className="grid grid-cols-2 gap-x-6 gap-y-2.5 text-xs font-semibold text-white/38">
             {genres.map((g) => (
               <li key={g.id}>
                 <Link
                   href={`/browse/movie?genre=${g.id}`}
-                  className="hover:text-accent"
+                  className="transition hover:text-accent"
                 >
                   {g.name}
                 </Link>
@@ -86,8 +86,10 @@ export default function Footer() {
         </div>
 
         <div>
-          <h4 className="mb-3 text-sm font-bold">Help</h4>
-          <ul className="space-y-2 text-xs text-zinc-400">
+          <h4 className="mb-4 text-xs font-extrabold uppercase tracking-[0.16em] text-white/75">
+            Help
+          </h4>
+          <ul className="space-y-2.5 text-xs font-semibold text-white/38">
             <li>My Account</li>
             <li>Customer Support</li>
             <li>Contact Us</li>
@@ -95,36 +97,30 @@ export default function Footer() {
           </ul>
         </div>
 
-        <div className="space-y-4">
-          <div>
-            <h4 className="mb-3 text-sm font-bold">Learn More</h4>
-            <ul className="space-y-2 text-xs text-zinc-400">
-              <li>
-                <Link href="/browse/movie" className="hover:text-accent">
-                  View Plans
-                </Link>
-              </li>
-              <li>Blog</li>
-              <li>Devices</li>
-              <li>About Us</li>
-            </ul>
-          </div>
-          <p className="text-xs text-zinc-500">Download mobile app</p>
-          <div className="flex gap-2">
-            <span className="rounded-lg border border-white/30 px-3 py-1.5 text-[10px] font-semibold">
-              App Store
-            </span>
-            <span className="rounded-lg border border-white/30 px-3 py-1.5 text-[10px] font-semibold">
-              Google Play
-            </span>
-          </div>
+        <div>
+          <h4 className="mb-4 text-xs font-extrabold uppercase tracking-[0.16em] text-white/75">
+            Explore
+          </h4>
+          <ul className="space-y-2.5 text-xs font-semibold text-white/38">
+            <li>
+              <Link href="/browse/movie" className="transition hover:text-accent">
+                Movies
+              </Link>
+            </li>
+            <li>
+              <Link href="/browse/tv" className="transition hover:text-accent">
+                TV Shows
+              </Link>
+            </li>
+            <li>Devices</li>
+            <li>About PinFlix</li>
+          </ul>
         </div>
       </div>
-      <div className="border-t border-white/10 py-5 text-center text-[11px] text-zinc-500">
-        © 2026 PINFLIX. All rights reserved. Metadata and images by TMDB; this
-        product is not endorsed or certified by TMDB.
+
+      <div className="mx-auto max-w-7xl border-t border-white/[0.07] py-5 text-center text-[10px] font-medium text-white/28 sm:text-left">
+        © 2026 PINFLIX. Metadata and images by TMDB; this product is not endorsed or certified by TMDB.
       </div>
     </footer>
   );
 }
-

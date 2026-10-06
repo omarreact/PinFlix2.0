@@ -8,7 +8,7 @@ export default function Home() {
     <>
       <Navbar />
       <Hero />
-      <main className="relative z-10 -mt-24 flex flex-col gap-6 sm:-mt-32">
+      <main className="relative z-10 -mt-16 flex flex-col gap-5 pb-4 sm:-mt-24 sm:gap-8">
         <Row
           title="Trending Movies"
           path="/trending/movie/week"
