@@ -1,6 +1,9 @@
 {
-  "_readme": "Add sources you own or are licensed to stream. Keys: 'movie:<tmdbId>', 'tv:<tmdbId>' or 'tv:<tmdbId>:s<season>e<episode>'. Values: array of { label, url } where url is an .m3u8 (HLS) or .mp4 link on your CDN.",
+  "_readme": "Add only sources you own or are licensed to stream. Keys: 'movie:<tmdbId>', 'tv:<tmdbId>' or 'tv:<tmdbId>:s<season>e<episode>'. Values: array of { label, url } where url is an .m3u8 (HLS) or .mp4 link. HTTPS plays directly. HTTP sources are routed through /api/media-proxy and their host (plus any CDN hosts referenced by HLS manifests) must be listed in MEDIA_PROXY_ALLOWED_HOSTS.",
   "movie:0": [
-    { "label": "Example (replace)", "url": "https://example.com/video/master.m3u8" }
+    {
+      "label": "Example (replace)",
+      "url": "https://example.com/video/master.m3u8"
+    }
   ]
 }
