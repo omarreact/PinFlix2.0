@@ -19,6 +19,11 @@ function MediaPlayer({ source }: { source: Source }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [failed, setFailed] = useState<string | null>(null);
 
+  const playbackUrl =
+    source.url.startsWith("http://")
+      ? `/api/media-proxy?url=${encodeURIComponent(source.url)}`
+      : source.url;
+
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
@@ -29,7 +34,7 @@ function MediaPlayer({ source }: { source: Source }) {
 
     if (source.kind === "hls") {
       if (video.canPlayType("application/vnd.apple.mpegurl")) {
-        video.src = source.url;
+        video.src = playbackUrl;
       } else {
         import("hls.js").then(({ default: Hls }) => {
           if (cancelled) return;
@@ -38,12 +43,12 @@ function MediaPlayer({ source }: { source: Source }) {
           hls.on(Hls.Events.ERROR, (_e, data) => {
             if (data.fatal) setFailed(source.url);
           });
-          hls.loadSource(source.url);
+          hls.loadSource(playbackUrl);
           hls.attachMedia(video);
         });
       }
     } else {
-      video.src = source.url;
+      video.src = playbackUrl;
     }
 
     return () => {
@@ -53,7 +58,7 @@ function MediaPlayer({ source }: { source: Source }) {
       video.removeAttribute("src");
       video.load();
     };
-  }, [source]);
+  }, [source, playbackUrl]);
 
   if (failed === source.url)
     return (
