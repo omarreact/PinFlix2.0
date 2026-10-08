@@ -90,6 +90,13 @@ a {
   animation: fade-up 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* The entrance animation has transform fill-mode, which would otherwise
+   trap position:fixed theater mode inside the animated grid. */
+.animate-fade-up:has([data-theater-mode="true"]) {
+  animation: none;
+  transform: none;
+}
+
 .animate-fade-in {
   animation: fade-in 0.55s ease-out both;
 }
