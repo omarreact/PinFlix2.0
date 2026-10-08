@@ -1,15 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, PlayCircle, Server } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import type { Video } from "@/lib/tmdb";
 
 interface VideoPlayerProps {
   tmdbId: string | number;
-  type: "movie" | "tv";
-  season?: number;
-  episode?: number;
-  // Existing TitleView props remain accepted without changing its API.
+  type?: "movie" | "tv";
+  season?: string | number;
+  episode?: string | number;
+  trailerKey?: string | null;
+  // Keep compatibility with PinFlix's existing TitleView.
   title?: string;
   year?: string;
   posterPath?: string | null;
@@ -22,164 +23,177 @@ interface EmbedProvider {
   tv: (id: string, season: number, episode: number) => string;
 }
 
-// Media is fetched by the viewer's browser directly from the provider.
-// PinFlix does not proxy, download, or store these iframe video streams.
-// Only use providers for content you are authorized to distribute.
-const EMBED_PROVIDERS: EmbedProvider[] = [
+// Streams are embedded directly into the visitor's browser, not proxied
+// through PinFlix. Only embed content you have permission to distribute.
+const PROVIDERS: EmbedProvider[] = [
   {
-    name: "VidSrc",
+    name: "VidSrc.cc (Best Pick)",
     movie: (id) => `https://vidsrc.cc/embed/movie/${id}`,
     tv: (id, season, episode) =>
       `https://vidsrc.cc/embed/tv/${id}/${season}/${episode}`,
   },
   {
-    name: "VidEasy",
+    name: "VidEasy (Up to 4K)",
     movie: (id) => `https://player.videasy.net/movie/${id}`,
     tv: (id, season, episode) =>
       `https://player.videasy.net/tv/${id}/${season}/${episode}`,
   },
   {
-    name: "VidSrc.me",
+    name: "VidSrc.me (Very Stable)",
     movie: (id) => `https://vidsrc.me/embed/movie?tmdb=${id}`,
     tv: (id, season, episode) =>
       `https://vidsrc.me/embed/tv?tmdb=${id}&season=${season}&episode=${episode}`,
   },
   {
-    name: "Embed.su",
+    name: "Embed.su (Fast Proxy)",
     movie: (id) => `https://embed.su/embed/movie/${id}`,
     tv: (id, season, episode) =>
       `https://embed.su/embed/tv/${id}/${season}/${episode}`,
   },
 ];
 
-function validEpisodeNumber(value: number | undefined, minimum: number) {
-  return typeof value === "number" &&
-    Number.isSafeInteger(value) &&
-    value >= minimum &&
-    value <= 999
-    ? value
-    : 1;
+const YOUTUBE_KEY = /^[A-Za-z0-9_-]{11}$/;
+
+function episodeNumber(value: string | number): number {
+  const raw = String(value).trim();
+  if (!/^[1-9][0-9]*$/.test(raw)) return 1;
+  const n = Number(raw);
+  return Number.isSafeInteger(n) && n <= 999 ? n : 1;
 }
 
 export default function VideoPlayer({
   tmdbId,
-  type,
-  season,
-  episode,
+  type = "movie",
+  season = 1,
+  episode = 1,
+  trailerKey = null,
   title,
   videos = [],
 }: VideoPlayerProps) {
   const id = String(tmdbId).trim();
-  const currentSeason = validEpisodeNumber(season, 0);
-  const currentEpisode = validEpisodeNumber(episode, 1);
-  const mediaKey = `${type}:${id}:${type === "tv" ? `${currentSeason}:${currentEpisode}` : ""}`;
+  const currentSeason = episodeNumber(season);
+  const currentEpisode = episodeNumber(episode);
+  const mediaKey = `${type}:${id}:${currentSeason}:${currentEpisode}`;
 
-  // Keying the selection to the title/episode resets the provider to the
-  // first server when TitleView changes its route params.
+  // A changed movie, season or episode immediately resets server and trailer
+  // without setting state in an effect (or flashing the previous embed).
   const [selection, setSelection] = useState({ mediaKey: "", index: 0 });
-  const [previewKey, setPreviewKey] = useState<string | null>(null);
-  const activeIndex = selection.mediaKey === mediaKey ? selection.index : 0;
-  const provider = EMBED_PROVIDERS[activeIndex];
+  const [trailerModeKey, setTrailerModeKey] = useState<string | null>(null);
+  const serverIndex = selection.mediaKey === mediaKey ? selection.index : 0;
+  const activeServer = PROVIDERS[serverIndex];
 
-  const trailer = videos
-    .filter((video) => video.site === "YouTube" && /^[a-zA-Z0-9_-]{11}$/.test(video.key))
+  // Support the new explicit trailerKey prop AND the existing TMDB videos prop.
+  const tmdbTrailer = videos
+    .filter((video) => video.site === "YouTube" && YOUTUBE_KEY.test(video.key))
     .sort((a, b) => Number(b.type === "Trailer") - Number(a.type === "Trailer"))[0];
-  const showingTrailer = Boolean(trailer && previewKey === mediaKey);
+  const resolvedTrailerKey =
+    trailerKey && YOUTUBE_KEY.test(trailerKey) ? trailerKey : tmdbTrailer?.key;
+  const isTrailerMode = Boolean(resolvedTrailerKey && trailerModeKey === mediaKey);
 
-  const embedUrl = type === "movie"
-    ? provider.movie(id)
-    : provider.tv(id, currentSeason, currentEpisode);
+  const embedUrl = type === "tv"
+    ? activeServer.tv(id, currentSeason, currentEpisode)
+    : activeServer.movie(id);
 
-  const tryNextServer = () => {
-    setPreviewKey(null);
+  const handleNextServer = () => {
+    setTrailerModeKey(null);
     setSelection({
       mediaKey,
-      index: (activeIndex + 1) % EMBED_PROVIDERS.length,
+      index: (serverIndex + 1) % PROVIDERS.length,
     });
+  };
+
+  const toggleTrailer = () => {
+    setTrailerModeKey(isTrailerMode ? null : mediaKey);
   };
 
   if (!/^[1-9][0-9]*$/.test(id)) {
     return (
-      <div role="alert" className="rounded-xl border border-white/10 bg-zinc-900 p-6 text-center text-sm text-amber-400">
-        This title has an invalid TMDB ID.
+      <div role="alert" className="rounded-xl bg-zinc-900 p-6 text-center text-sm text-amber-400">
+        Invalid TMDB ID.
       </div>
     );
   }
 
   return (
     <section aria-label="PinFlix video player" className="flex w-full flex-col gap-3">
-      <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-white/10 bg-black shadow-2xl shadow-black">
-        {showingTrailer && trailer ? (
+      <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black shadow-2xl ring-1 ring-white/10">
+        {isTrailerMode && resolvedTrailerKey ? (
           <iframe
-            key={`trailer:${mediaKey}:${trailer.key}`}
-            src={`https://www.youtube-nocookie.com/embed/${trailer.key}?rel=0`}
-            title={`Official preview: ${trailer.name}`}
+            key={`trailer:${mediaKey}:${resolvedTrailerKey}`}
+            src={`https://www.youtube-nocookie.com/embed/${resolvedTrailerKey}?rel=0&autoplay=1`}
             className="absolute inset-0 h-full w-full border-0"
-            loading="lazy"
-            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-            sandbox="allow-scripts allow-same-origin allow-presentation"
+            title={`Official trailer: ${title || id}`}
             allowFullScreen
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            sandbox="allow-scripts allow-same-origin allow-presentation"
+            referrerPolicy="strict-origin-when-cross-origin"
           />
         ) : (
           <iframe
-            key={`stream:${mediaKey}:${activeIndex}`}
+            key={`stream:${mediaKey}:${serverIndex}`}
             src={embedUrl}
-            title={`${provider.name} player: ${title || `${type} ${id}`}`}
             className="absolute inset-0 h-full w-full border-0"
-            loading="lazy"
-            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-            referrerPolicy="strict-origin-when-cross-origin"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
+            title={`${activeServer.name} player: ${title || id}`}
             allowFullScreen
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
+            referrerPolicy="strict-origin-when-cross-origin"
           />
         )}
       </div>
 
-      <div className="glass flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 p-3 sm:p-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/10 text-zinc-300">
-            <Server size={19} />
-          </div>
-          <div aria-live="polite" aria-atomic="true" className="min-w-0">
-            <p className="text-[11px] font-medium text-zinc-400">Current Server</p>
-            <p className="truncate text-sm font-bold text-white">
-              {showingTrailer ? "Official Trailer" : provider.name}
-              {!showingTrailer && (
-                <span className="ml-2 text-xs font-normal text-zinc-400">
-                  {activeIndex + 1} / {EMBED_PROVIDERS.length}
-                </span>
-              )}
+      <div className="flex flex-col items-center justify-between gap-4 rounded-lg border border-gray-800 bg-[#111111] p-4 text-sm sm:flex-row">
+        <div aria-live="polite" className="min-w-0 text-center text-gray-400 sm:text-left">
+          {isTrailerMode ? (
+            <p className="font-semibold text-white">
+              Currently Playing:
+              <span className="ml-1 text-red-500">Official Trailer</span>
             </p>
-          </div>
+          ) : (
+            <>
+              <span className="font-semibold text-white">Playing on: </span>
+              <span className="ml-1 font-medium text-emerald-400">{activeServer.name}</span>
+              <span className="ml-2 text-xs text-gray-500">
+                (Server {serverIndex + 1} of {PROVIDERS.length})
+              </span>
+            </>
+          )}
         </div>
 
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-          {trailer && (
+        <div className="flex w-full flex-wrap justify-center gap-3 sm:w-auto">
+          {resolvedTrailerKey && (
             <button
               type="button"
-              onClick={() => setPreviewKey(mediaKey)}
-              aria-pressed={showingTrailer}
-              className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 ${showingTrailer ? "bg-blue-600 text-white" : "bg-white/10 text-zinc-200 hover:bg-white/20"}`}
+              onClick={toggleTrailer}
+              aria-pressed={isTrailerMode}
+              className={`inline-flex min-h-11 items-center justify-center rounded-md px-4 py-2.5 font-medium text-white shadow-lg transition-all active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${isTrailerMode
+                ? "bg-gray-700 hover:bg-gray-600"
+                : "bg-red-600 hover:bg-red-700"}`}
             >
-              <PlayCircle size={15} aria-hidden="true" />
-              Trailer
+              {isTrailerMode ? "Back to Movie" : "Watch Trailer"}
             </button>
           )}
-          <button
-            type="button"
-            onClick={tryNextServer}
-            className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-xs font-extrabold text-black transition-colors hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:flex-none"
-          >
-            Try Next Server
-            <ArrowRight size={15} aria-hidden="true" />
-          </button>
+
+          {!isTrailerMode && (
+            <button
+              type="button"
+              onClick={handleNextServer}
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md bg-indigo-600 px-5 py-2.5 font-medium text-white shadow-lg transition-all hover:bg-indigo-700 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-300 sm:flex-none"
+            >
+              <RotateCcw size={16} aria-hidden="true" />
+              Next Server
+            </button>
+          )}
         </div>
       </div>
+
       <p className="text-xs text-zinc-500">
-        If playback is unavailable, try another server. Streams load directly from external providers, not through PinFlix servers.
+        If playback is unavailable, choose another server. Video is delivered by the selected external provider.
       </p>
-      {showingTrailer && (
-        <p className="text-xs text-zinc-500">Preview only — a trailer is not a full movie or episode.</p>
+      {isTrailerMode && (
+        <p className="text-xs text-zinc-500">
+          Official trailer preview only — this is not the full movie or episode.
+        </p>
       )}
     </section>
   );
