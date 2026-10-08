@@ -49,7 +49,7 @@ export default function ContinueWatching() {
                 </div>
                 <div className="absolute inset-x-0 bottom-0 h-1.5 bg-white/20">
                   <div className="h-full bg-accent" style={{
-                    width: `${Math.min(100, 100 * entry.seconds / entry.duration)}%`,
+                    width: `${entry.duration > 0 ? Math.min(100, Math.max(0, 100 * entry.seconds / entry.duration)) : 0}%`,
                   }} />
                 </div>
               </div>
