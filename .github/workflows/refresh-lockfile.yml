@@ -1,0 +1,33 @@
+name: Regenerate npm lockfile (temporary)
+on:
+  push:
+    branches: [feat/master-media-api-20261008]
+    paths:
+      - ".github/workflows/refresh-lockfile.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Regenerate lockfile without lifecycle scripts
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Commit synchronized lockfile to feature branch
+        run: |
+          set -eu
+          if git diff --quiet -- package-lock.json; then
+            echo "package-lock.json already synchronized"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "chore: synchronize Firebase dependency lockfile"
+          git push origin HEAD:feat/master-media-api-20261008
