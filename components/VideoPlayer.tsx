@@ -188,7 +188,7 @@ export default function VideoPlayer({
         ? "fixed inset-0 z-[80] flex w-screen flex-col items-center gap-3 overflow-y-auto bg-black/95 px-3 py-8 backdrop-blur-sm sm:px-8"
         : "flex w-full flex-col gap-3"}
     >
-      <div className="relative aspect-video w-full max-w-5xl shrink-0 overflow-hidden rounded-xl bg-black shadow-2xl ring-1 ring-white/10">
+      <div className="relative aspect-video w-full max-w-5xl shrink-0 overflow-hidden rounded-xl border border-white/15 bg-black">
         {isTrailerMode && officialTrailer ? (
           <iframe
             key={`trailer:${mediaKey}:${officialTrailer}`}
@@ -236,12 +236,12 @@ export default function VideoPlayer({
         )}
       </div>
 
-      <div className="flex w-full max-w-5xl flex-col items-center justify-between gap-4 rounded-lg border border-gray-800 bg-[#111111] p-4 text-sm sm:flex-row">
+      <div className="flex w-full max-w-5xl flex-col items-center justify-between gap-4 rounded-xl border border-white/15 bg-surface p-4 text-sm sm:flex-row">
         <div aria-live="polite" className="min-w-0 text-center text-zinc-400 sm:text-left">
           <p className="text-[11px] uppercase tracking-wide text-zinc-500">
             {isTrailerMode ? "Official preview" : "Current source"}
           </p>
-          <p className="mt-1 truncate text-sm font-semibold text-emerald-400">
+          <p className="mt-1 truncate text-sm font-medium text-accent">
             {isTrailerMode ? "YouTube Trailer" :
               activeSource ? activeSource.label :
               isLoading ? "Checking…" : "No licensed source"}
@@ -267,7 +267,7 @@ export default function VideoPlayer({
               type="button"
               onClick={() => setTrailerModeKey(isTrailerMode ? null : mediaKey)}
               aria-pressed={isTrailerMode}
-              className={`inline-flex min-h-10 items-center gap-2 rounded-md px-4 py-2 font-semibold text-white ${isTrailerMode ? "bg-gray-700 hover:bg-gray-600" : "bg-red-600 hover:bg-red-700"}`}
+              className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-4 py-2 font-medium ${isTrailerMode ? "border-white/25 bg-white/10 text-white hover:bg-white/20" : "border-accent bg-accent text-[#0b100e] hover:bg-accent-soft"}`}
             >
               <Play size={15} aria-hidden="true" />
               {isTrailerMode ? "Back to Video" : "Watch Trailer"}
@@ -277,7 +277,7 @@ export default function VideoPlayer({
             <button
               type="button"
               onClick={nextSource}
-              className="inline-flex min-h-10 items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 font-semibold text-white hover:bg-indigo-700"
+              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 py-2 font-medium text-white hover:text-accent"
             >
               <RotateCcw size={16} aria-hidden="true" />
               Next Source
@@ -296,7 +296,7 @@ export default function VideoPlayer({
               setFailedStream(null);
               setSelection({ key: mediaKey, index: Number(event.target.value) });
             }}
-            className="w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-sm text-white outline-none focus:border-indigo-500"
+            className="w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-sm text-white outline-none focus:border-accent"
           >
             {sources.map((source, index) => (
               <option key={`${source.url}:${index}`} value={index}>{source.label}</option>
