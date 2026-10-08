@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  Activity,
   AlertCircle,
   ChevronLeft,
   ChevronRight,
@@ -20,6 +21,7 @@ import NativeMediaPlayer, { type PlayableSource } from "@/components/NativeMedia
 import type { Video } from "@/lib/tmdb";
 import type { LibraryTitle } from "@/lib/library";
 import { getNextEpisode, getPreviousEpisode, type SeasonSummary } from "@/lib/episode-navigation";
+import { probeBdixEndpoint, type BdixProbeResult } from "@/lib/bdix";
 
 export interface StreamMirror {
   id: string;
@@ -178,6 +180,19 @@ export default function VideoPlayer({
   const [nativeSourceIndex, setNativeSourceIndex] = useState(0);
   const [allNativeFailed, setAllNativeFailed] = useState(false);
   const [showMirrorsNotice, setShowMirrorsNotice] = useState(false);
+  const [bdixStatus, setBdixStatus] = useState<BdixProbeResult | null>(null);
+  const [probingBdix, setProbingBdix] = useState(false);
+
+  const checkBdix = async () => {
+    setProbingBdix(true);
+    const result = await probeBdixEndpoint();
+    setBdixStatus(result);
+    setProbingBdix(false);
+  };
+
+  useEffect(() => {
+    void probeBdixEndpoint().then(setBdixStatus);
+  }, []);
 
   // Handle trailer resolution
   const tmdbTrailer = videos
@@ -551,6 +566,30 @@ export default function VideoPlayer({
 
         {/* Source Selection & Player Controls Bar */}
         <div className="flex w-full max-w-5xl flex-col gap-3 rounded-2xl border border-white/15 bg-surface/90 p-3 sm:p-4 backdrop-blur-md">
+          {/* BDIX Peering Network Status Indicator */}
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/20 bg-emerald-950/25 px-3 py-2 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="font-semibold text-emerald-300">
+                BDIX Peering: vod.cineplexbd.net:8081
+              </span>
+              <span className="text-[11px] text-zinc-400">
+                {bdixStatus?.reachable
+                  ? `(${bdixStatus.latencyMs}ms local RTT · Unmetered)`
+                  : "(Primary ISP CDN)"}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => void checkBdix()}
+              disabled={probingBdix}
+              className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
+            >
+              <Activity size={12} />
+              {probingBdix ? "Testing..." : bdixStatus?.reachable ? "Retest BDIX Ping" : "Ping BDIX"}
+            </button>
+          </div>
+
           {/* Source Tabs */}
           <div>
             <div className="mb-2 flex items-center justify-between">

@@ -14,10 +14,13 @@ const ALLOWED = [
 ];
 
 export async function GET(req: NextRequest) {
-  const key = process.env.TMDB_API_KEY;
+  const readToken = process.env.TMDB_READ_ACCESS_TOKEN;
+  const apiKey = process.env.TMDB_API_KEY;
+  const key = readToken || apiKey;
+
   if (!key) {
     return NextResponse.json(
-      { error: "Missing TMDB_API_KEY in .env.local" },
+      { error: "Missing TMDB credentials in .env.local" },
       { status: 500 },
     );
   }
@@ -31,10 +34,17 @@ export async function GET(req: NextRequest) {
   params.forEach((v, k) => k !== "path" && url.searchParams.set(k, v));
   url.searchParams.set("language", "en-US");
 
-  const headers: HeadersInit = key.startsWith("eyJ")
-    ? { Authorization: `Bearer ${key}` } // v4 read access token
-    : {};
-  if (!key.startsWith("eyJ")) url.searchParams.set("api_key", key);
+  const headers: Record<string, string> = {
+    accept: "application/json",
+  };
+
+  if (readToken) {
+    headers["Authorization"] = `Bearer ${readToken}`;
+  } else if (apiKey?.startsWith("eyJ")) {
+    headers["Authorization"] = `Bearer ${apiKey}`;
+  } else if (apiKey) {
+    url.searchParams.set("api_key", apiKey);
+  }
 
   const res = await fetch(url, { headers, next: { revalidate: 3600 } });
   const data = await res.json();
