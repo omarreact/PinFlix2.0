@@ -42,7 +42,9 @@ export async function GET(request: NextRequest) {
   const response = buildMasterMediaResponse(
     selection,
     sources,
-    process.env.MEDIA_SOURCE_ALLOWED_HOSTS,
+    // media.pincodeit.com is this application's first-party public-use CDN.
+    // Private/third-party media hosts remain explicitly environment-allowlisted.
+    [process.env.MEDIA_SOURCE_ALLOWED_HOSTS, "media.pincodeit.com"].filter(Boolean).join(","),
     process.env.MEDIA_PROXY_ALLOWED_HOSTS,
   );
 
