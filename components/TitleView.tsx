@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, Clock, Play, Star } from "lucide-react";
 import Footer, { CtaBanner } from "@/components/Footer";
 import Navbar from "@/components/Navbar";
@@ -11,6 +11,7 @@ import PopularList from "@/components/PopularList";
 import Row from "@/components/Row";
 import { ActionBar, Reviews } from "@/components/Social";
 import VideoPlayer from "@/components/VideoPlayer";
+import WatchProviders from "@/components/WatchProviders";
 import {
   img,
   tmdb,
@@ -22,13 +23,36 @@ import {
 
 export default function TitleView() {
   const { type, id } = useParams<{ type: "movie" | "tv"; id: string }>();
-  const playParam = useSearchParams().get("play");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const playParam = searchParams.get("play");
+  const urlSeason = Number(searchParams.get("season") ?? "1");
+  const urlEpisode = Number(searchParams.get("episode") ?? "1");
+  const safeNumber = (n: number) => Number.isSafeInteger(n) && n > 0 && n <= 999 ? n : 1;
   const [d, setD] = useState<Details | null>(null);
   const [error, setError] = useState(false);
-  const [showPlayer, setShowPlayer] = useState(false);
-  const [season, setSeason] = useState(1);
+  const [showPlayer, setShowPlayer] = useState(playParam === "1");
+  const [season, setSeason] = useState(() => safeNumber(urlSeason));
   const [episodes, setEpisodes] = useState<Episode[]>([]);
-  const [episode, setEpisode] = useState(1);
+  const [episode, setEpisode] = useState(() => safeNumber(urlEpisode));
+
+  const updateSelection = (nextSeason: number, nextEpisode: number, play: boolean) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (type === "tv") {
+      params.set("season", String(nextSeason));
+      params.set("episode", String(nextEpisode));
+    }
+    if (play) params.set("play", "1");
+    router.replace(`/title/${type}/${id}?${params.toString()}`, { scroll: false });
+  };
+
+  useEffect(() => {
+    if (type === "tv") {
+      setSeason(safeNumber(urlSeason));
+      setEpisode(safeNumber(urlEpisode));
+    }
+    if (playParam === "1") setShowPlayer(true);
+  }, [type, id, urlSeason, urlEpisode, playParam]);
 
   useEffect(() => {
     if (type !== "movie" && type !== "tv") return;
@@ -40,12 +64,11 @@ export default function TitleView() {
     )
       .then((x) => {
         setD(x);
-        setShowPlayer(playParam === "1");
         document.title = `${titleOf(x)} · PINFLIX`;
       })
       .catch((e) => e.name !== "AbortError" && setError(true));
     return () => ac.abort();
-  }, [type, id, playParam]);
+  }, [type, id]);
 
   useEffect(() => {
     if (type !== "tv") return;
@@ -53,7 +76,8 @@ export default function TitleView() {
     tmdb<{ episodes: Episode[] }>(`/tv/${id}/season/${season}`, {}, ac.signal)
       .then((s) => {
         setEpisodes(s.episodes);
-        setEpisode(s.episodes[0]?.episode_number ?? 1);
+        setEpisode((current) => s.episodes.some((e) => e.episode_number === current)
+          ? current : (s.episodes[0]?.episode_number ?? 1));
       })
       .catch(() => setEpisodes([]));
     return () => ac.abort();
@@ -126,10 +150,14 @@ export default function TitleView() {
                   season={type === "tv" ? season : undefined}
                   episode={type === "tv" ? episode : undefined}
                   videos={d.videos?.results ?? []}
+                  posterPath={d.poster_path}
                 />
               ) : (
                 <button
-                  onClick={() => setShowPlayer(true)}
+                  onClick={() => {
+                    setShowPlayer(true);
+                    updateSelection(season, episode, true);
+                  }}
                   className="group relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-xl bg-zinc-900"
                 >
                   {d.backdrop_path && (
@@ -157,7 +185,12 @@ export default function TitleView() {
                   <div className="relative rounded-md border border-white/15 bg-black">
                     <select
                       value={season}
-                      onChange={(e) => setSeason(Number(e.target.value))}
+                      onChange={(e) => {
+                        const next = safeNumber(Number(e.target.value));
+                        setSeason(next);
+                        setEpisode(1);
+                        updateSelection(next, 1, showPlayer);
+                      }}
                       className="cursor-pointer appearance-none bg-transparent py-1.5 pl-3 pr-7 text-xs font-semibold outline-none [&>option]:bg-zinc-900"
                     >
                       {seasons.map((s) => (
@@ -179,6 +212,7 @@ export default function TitleView() {
                         onClick={() => {
                           setEpisode(e.episode_number);
                           setShowPlayer(true);
+                          updateSelection(season, e.episode_number, true);
                         }}
                         className={`flex w-full gap-3 rounded-lg p-2 text-left transition ${
                           e.episode_number === episode
@@ -284,7 +318,10 @@ export default function TitleView() {
               </p>
             )}
             <div className="mt-5">
-              <ActionBar storageId={`${type}${d.id}`} />
+              <ActionBar storageId={`${type}${d.id}`}
+                item={{ type, id: d.id, title: titleOf(d), year: yearOf(d),
+                  posterPath: d.poster_path }} />
+              <WatchProviders type={type} id={d.id} />
             </div>
           </section>
 

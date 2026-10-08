@@ -1,106 +1,120 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Film, Loader2 } from "lucide-react";
+import { AlertTriangle, Film, Loader2, RotateCcw, PlayCircle } from "lucide-react";
 import type { Video } from "@/lib/tmdb";
+import { getProgress, saveProgress, type LibraryTitle } from "@/lib/library";
 
-interface Source {
-  label: string;
-  url: string;
-  kind: "hls" | "mp4";
-}
+interface Source { label: string; url: string; kind: "hls" | "mp4"; }
 
-type Server =
-  | ({ id: string } & Source)
-  | { id: string; label: string; kind: "youtube"; url: string };
-
-/** Native HLS (Safari) or hls.js everywhere else; plain <video> for MP4. */
-function MediaPlayer({ source }: { source: Source }) {
+function MediaPlayer({ source, item, season, episode, onFailure }: {
+  source: Source;
+  item: LibraryTitle;
+  season?: number;
+  episode?: number;
+  onFailure: () => void;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
-  const [failed, setFailed] = useState<string | null>(null);
-
-  const playbackUrl =
-    source.url.startsWith("http://")
-      ? `/api/media-proxy?url=${encodeURIComponent(source.url)}`
-      : source.url;
+  const failureRef = useRef(onFailure);
+  useEffect(() => { failureRef.current = onFailure; }, [onFailure]);
+  const playbackUrl = source.url.startsWith("http://")
+    ? `/api/media-proxy?url=${encodeURIComponent(source.url)}`
+    : source.url;
 
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
     let hls: import("hls.js").default | undefined;
-    let cancelled = false;
-    const onError = () => setFailed(source.url);
-    video.addEventListener("error", onError);
+    let stopped = false;
+    let failed = false;
+    let lastSave = 0;
+    const fail = () => {
+      if (stopped || failed) return;
+      failed = true;
+      failureRef.current();
+    };
+    const metadata = () => {
+      const saved = getProgress(item, season, episode);
+      if (saved && !saved.completed && saved.seconds >= 5 &&
+          Number.isFinite(video.duration) && saved.seconds < video.duration - 10) {
+        try { video.currentTime = saved.seconds; } catch { /* not seekable */ }
+      }
+    };
+    const progress = () => {
+      const now = Date.now();
+      if (now - lastSave < 5000 || !Number.isFinite(video.duration) ||
+          video.duration <= 0) return;
+      lastSave = now;
+      saveProgress(item, video.currentTime, video.duration, season, episode);
+    };
+    const finish = () => {
+      if (Number.isFinite(video.duration) && video.duration > 0)
+        saveProgress(item, video.duration, video.duration, season, episode, true);
+    };
+    video.addEventListener("error", fail);
+    video.addEventListener("loadedmetadata", metadata);
+    video.addEventListener("timeupdate", progress);
+    video.addEventListener("pause", progress);
+    video.addEventListener("ended", finish);
 
     if (source.kind === "hls") {
       if (video.canPlayType("application/vnd.apple.mpegurl")) {
         video.src = playbackUrl;
       } else {
         import("hls.js").then(({ default: Hls }) => {
-          if (cancelled) return;
-          if (!Hls.isSupported()) return setFailed(source.url);
-          hls = new Hls();
-          hls.on(Hls.Events.ERROR, (_e, data) => {
-            if (data.fatal) setFailed(source.url);
-          });
+          if (stopped) return;
+          if (!Hls.isSupported()) { fail(); return; }
+          hls = new Hls({ enableWorker: true });
+          hls.on(Hls.Events.ERROR, (_event, data) => { if (data.fatal) fail(); });
           hls.loadSource(playbackUrl);
           hls.attachMedia(video);
-        });
+        }).catch(fail);
       }
     } else {
       video.src = playbackUrl;
     }
-
     return () => {
-      cancelled = true;
-      video.removeEventListener("error", onError);
+      // Preserve the last playhead when switching sources or episodes.
+      if (video.currentTime > 0 && Number.isFinite(video.duration) && video.duration > 0 &&
+          !video.ended) {
+        saveProgress(item, video.currentTime, video.duration, season, episode);
+      }
+      stopped = true;
+      video.removeEventListener("error", fail);
+      video.removeEventListener("loadedmetadata", metadata);
+      video.removeEventListener("timeupdate", progress);
+      video.removeEventListener("pause", progress);
+      video.removeEventListener("ended", finish);
       hls?.destroy();
       video.removeAttribute("src");
       video.load();
     };
-  }, [source, playbackUrl]);
+  }, [source.url, source.kind, playbackUrl, item.type, item.id, item.title,
+    item.year, item.posterPath, season, episode]);
 
-  if (failed === source.url)
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-400">
-        <AlertTriangle />
-        This source failed to load. Try another server.
-      </div>
-    );
-
-  return (
-    <video
-      ref={ref}
-      controls
-      autoPlay
-      playsInline
-      className="h-full w-full bg-black"
-    />
-  );
+  return <video ref={ref} controls autoPlay playsInline preload="metadata"
+    className="h-full w-full bg-black" aria-label={item.title} />;
 }
 
 export default function VideoPlayer({
-  type,
-  tmdbId,
-  title,
-  year,
-  season,
-  episode,
-  videos,
+  type, tmdbId, title, year, posterPath, season, episode, videos,
 }: {
   type: "movie" | "tv";
   tmdbId: number;
   title: string;
   year: string;
+  posterPath?: string | null;
   season?: number;
   episode?: number;
   videos: Video[];
 }) {
   const reqKey = `${type}:${tmdbId}:${season ?? ""}:${episode ?? ""}`;
-  const [loaded, setLoaded] = useState<{ key: string; sources: Source[] } | null>(
-    null,
-  );
-  const [pick, setPick] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState<{ key: string; sources: Source[]; error?: boolean } | null>(null);
+  const [choice, setChoice] = useState<{ key: string; index: number }>({ key: "", index: 0 });
+  const [failed, setFailed] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const [trailerMode, setTrailerMode] = useState<string | null>(null);
+  const item: LibraryTitle = { type, id: tmdbId, title, year, posterPath: posterPath ?? null };
 
   useEffect(() => {
     const ac = new AbortController();
@@ -109,86 +123,113 @@ export default function VideoPlayer({
     u.searchParams.set("id", String(tmdbId));
     u.searchParams.set("title", title);
     u.searchParams.set("year", year);
-    if (season) u.searchParams.set("season", String(season));
-    if (episode) u.searchParams.set("episode", String(episode));
+    if (type === "tv" && season !== undefined && episode !== undefined) {
+      u.searchParams.set("season", String(season));
+      u.searchParams.set("episode", String(episode));
+    }
     fetch(u, { signal: ac.signal })
-      .then((r) => r.json())
-      .then((d) => setLoaded({ key: reqKey, sources: d.sources ?? [] }))
-      .catch(
-        (e) =>
-          e.name !== "AbortError" && setLoaded({ key: reqKey, sources: [] }),
-      );
+      .then((r) => {
+        if (!r.ok) throw new Error("Source resolver failed");
+        return r.json();
+      })
+      .then((data: { sources?: Source[] }) => setLoaded({
+        key: reqKey, sources: Array.isArray(data.sources) ? data.sources : [],
+      }))
+      .catch((error: Error) => {
+        if (error.name !== "AbortError") setLoaded({ key: reqKey, sources: [], error: true });
+      });
     return () => ac.abort();
   }, [reqKey, type, tmdbId, title, year, season, episode]);
 
   const loading = loaded?.key !== reqKey;
+  const sources = loading ? [] : (loaded?.sources ?? []);
+  const selected = choice.key === reqKey ? choice.index : 0;
+  const active = sources[selected] ?? sources[0];
+  const error = failed === `${reqKey}:${selected}`;
+  const trailer = videos.filter((v) => v.site === "YouTube" &&
+    /^[A-Za-z0-9_-]{11}$/.test(v.key))
+    .sort((a, b) => Number(b.type === "Trailer") - Number(a.type === "Trailer"))[0];
+  const showTrailer = Boolean(trailer && (trailerMode === reqKey || sources.length === 0));
 
-  const servers: Server[] = [
-    ...(loading ? [] : loaded!.sources).map((s, i) => ({
-      ...s,
-      id: `src${i}`,
-    })),
-    ...videos
-      .filter((v) => v.site === "YouTube")
-      .sort((a, b) => Number(b.type === "Trailer") - Number(a.type === "Trailer"))
-      .slice(0, 3)
-      .map(
-        (v): Server => ({
-          id: `yt${v.id}`,
-          label: `${v.type}: ${v.name.slice(0, 24)}`,
-          kind: "youtube",
-          url: v.key,
-        }),
-      ),
-  ];
-
-  const active = servers.find((s) => s.id === pick) ?? servers[0];
+  const switchSource = (index: number) => {
+    setTrailerMode(null);
+    setFailed(null);
+    setChoice({ key: reqKey, index });
+    setRetry((count) => count + 1);
+  };
+  const sourceFailure = () => {
+    if (selected + 1 < sources.length) switchSource(selected + 1);
+    else setFailed(`${reqKey}:${selected}`);
+  };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-white/10 bg-zinc-900 shadow-2xl shadow-black">
         {loading ? (
           <div className="flex h-full items-center justify-center gap-2 text-zinc-300">
-            <Loader2 className="animate-spin" /> Finding sources…
+            <Loader2 className="animate-spin" /> Finding available sources…
           </div>
-        ) : !active ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-400">
-            <Film /> No playable source for this title.
+        ) : showTrailer && trailer ? (
+          <iframe key={reqKey + trailer.key}
+            src={`https://www.youtube-nocookie.com/embed/${trailer.key}?rel=0&autoplay=1`}
+            title={`Official preview: ${trailer.name}`}
+            className="h-full w-full" allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+            sandbox="allow-scripts allow-same-origin allow-presentation" allowFullScreen />
+        ) : error ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-5 text-center text-zinc-400">
+            <AlertTriangle size={28} />
+            <p>This source couldn&apos;t play. Check the media origin or select another source.</p>
+            <button className="flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2 text-sm"
+              onClick={() => { setFailed(null); setRetry((v) => v + 1); }}>
+              <RotateCcw size={15} /> Retry
+            </button>
           </div>
-        ) : active.kind === "youtube" ? (
-          <iframe
-            key={active.id}
-            src={`https://www.youtube-nocookie.com/embed/${active.url}?rel=0&autoplay=1`}
-            title={active.label}
-            className="h-full w-full"
-            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-            allowFullScreen
-          />
+        ) : active ? (
+          <MediaPlayer key={`${reqKey}:${selected}:${retry}`}
+            source={active} item={item} season={season} episode={episode}
+            onFailure={sourceFailure} />
         ) : (
-          <MediaPlayer key={active.id} source={active} />
+          <div className="flex h-full flex-col items-center justify-center gap-2 p-5 text-center text-zinc-400">
+            <Film size={30} />
+            <p className="font-semibold">No full-length stream is configured for this title.</p>
+            <p className="max-w-md text-xs">PinFlix shows trailers and provider availability separately from licensed playable media.</p>
+          </div>
         )}
       </div>
-
-      {servers.length > 0 && (
-        <div className="glass no-scrollbar flex items-center gap-2 overflow-x-auto rounded-xl p-3">
-          <span className="mr-2 shrink-0 text-sm text-zinc-400">Server:</span>
-          {servers.map((s, i) => (
-            <button
-              key={s.id}
-              onClick={() => setPick(s.id)}
-              className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                s.id === active?.id
-                  ? s.kind === "youtube"
-                    ? "bg-blue-600 text-white" : "bg-accent text-black"
-                  : "bg-white/10 text-zinc-300 hover:bg-white/20"
-              }`}
-            >
-              {s.kind === "youtube" ? s.label : `Server ${i + 1} · ${s.label}`}
+      {loaded?.key === reqKey && loaded.error && (
+        <p role="alert" className="text-xs text-amber-400">
+          The media source service is unavailable. Please retry later.
+        </p>
+      )}
+      {(sources.length > 0 || trailer) && !loading && (
+        <div className="glass no-scrollbar flex flex-wrap items-center gap-2 rounded-xl p-3">
+          {sources.length > 0 && <span className="mr-1 text-xs text-zinc-400">Streams:</span>}
+          {sources.map((source, index) => (
+            <button key={source.url + index} onClick={() => switchSource(index)}
+              aria-pressed={!showTrailer && selected === index}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                !showTrailer && selected === index ? "bg-accent text-black" :
+                  "bg-white/10 text-zinc-300 hover:bg-white/20"
+              }`}>
+              {source.label}
             </button>
           ))}
+          {trailer && (
+            <button onClick={() => setTrailerMode(reqKey)}
+              aria-pressed={showTrailer}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold ${
+                showTrailer ? "bg-blue-600 text-white" : "bg-white/10 text-zinc-300"
+              }`}>
+              <PlayCircle size={14} /> Watch trailer
+            </button>
+          )}
         </div>
+      )}
+      {showTrailer && (
+        <p className="text-xs text-zinc-500">
+          Preview only — a trailer is not a full movie or episode.
+        </p>
       )}
     </div>
   );
 }
-

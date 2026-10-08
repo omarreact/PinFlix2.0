@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Heart, Plus, Share2, Check, Star } from "lucide-react";
+import { isSaved, setWatchlist, type LibraryTitle } from "@/lib/library";
 
 const read = <T,>(key: string, fallback: T): T => {
   try {
@@ -12,9 +13,14 @@ const read = <T,>(key: string, fallback: T): T => {
 };
 
 /** Like / Watchlist / Share, persisted in localStorage. */
-export function ActionBar({ storageId }: { storageId: string }) {
+export function ActionBar({ storageId, item }: { storageId: string; item: LibraryTitle }) {
   const [liked, setLiked] = useState(() => read(`like:${storageId}`, false));
-  const [saved, setSaved] = useState(() => read(`list:${storageId}`, false));
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    const legacy = read(`list:${storageId}`, false);
+    if (legacy && !isSaved(item)) setWatchlist(item, true);
+    setSaved(isSaved(item));
+  }, [storageId, item.type, item.id, item.title, item.year, item.posterPath]);
   const [copied, setCopied] = useState(false);
 
   const toggle = (k: string, v: boolean, set: (b: boolean) => void) => {
@@ -43,7 +49,11 @@ export function ActionBar({ storageId }: { storageId: string }) {
         {liked ? "Liked" : "Like"}
       </button>
       <button
-        onClick={() => toggle(`list:${storageId}`, saved, setSaved)}
+        onClick={() => {
+          setWatchlist(item, !saved);
+          setSaved(!saved);
+          localStorage.setItem(`list:${storageId}`, JSON.stringify(!saved));
+        }}
         className={btn}
       >
         {saved ? <Check size={14} className="text-accent" /> : <Plus size={14} />}

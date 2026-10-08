@@ -10,6 +10,7 @@ export const LINKS = [
   { href: "/", label: "Home" },
   { href: "/browse/movie", label: "Movies" },
   { href: "/browse/tv", label: "TV Shows" },
+  { href: "/my-list", label: "My List" },
 ];
 
 export function Logo() {
@@ -164,12 +165,13 @@ export default function Navbar() {
             )}
           </div>
 
-          <button
-            aria-label="Profile"
+          <Link
+            href="/my-list"
+            aria-label="My Library"
             className="hidden h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white/70 transition hover:bg-white/10 hover:text-white sm:flex"
           >
             <User size={17} />
-          </button>
+          </Link>
 
           <Link
             href="/browse/movie"
