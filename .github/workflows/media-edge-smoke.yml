@@ -1,0 +1,52 @@
+name: PinFlix Cloudflare edge smoke test
+
+on:
+  push:
+    branches: [main, "feat/**"]
+    paths:
+      - cloudflare/pinflix-media-worker.mjs
+      - .github/workflows/media-edge-smoke.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  playback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check Worker health
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent --retry 3 --retry-delay 3 \
+            'https://media.pincodeit.com/health' > /tmp/edge-health.json
+          node -e 'const h=require("/tmp/edge-health.json"); if(h.service!=="pinflix-media-api"||!h.r2)process.exit(1); console.log("Worker healthy; R2 bound")'
+
+      - name: Resolve signed original test clip
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent --retry 3 --retry-delay 3 \
+            'https://media.pincodeit.com/diagnostic' > /tmp/edge-diagnostic.json
+          node -e 'const d=require("/tmp/edge-diagnostic.json"); if(d.status!=="ready"||d.kind!=="mp4"||d.bytes<1000||!d.playbackUrl.startsWith("https://media.pincodeit.com/m/media/diagnostic/edge-health.mp4?")) process.exit(1); console.log("Signed diagnostic: "+d.bytes+" bytes")'
+          node -e 'process.stdout.write(require("/tmp/edge-diagnostic.json").playbackUrl)' > /tmp/signed-url.txt
+
+      - name: Download signed MP4 and verify its container
+        run: |
+          set -euo pipefail
+          url="$(cat /tmp/signed-url.txt)"
+          curl --fail --show-error --silent --retry 3 --retry-delay 3 \
+            --output /tmp/pinflix-edge-test.mp4 "$url"
+          node -e 'const fs=require("node:fs");const b=fs.readFileSync("/tmp/pinflix-edge-test.mp4");if(b.length<1000||b.toString("ascii",4,8)!=="ftyp") process.exit(1); console.log("MP4 container OK, "+b.length+" bytes")'
+
+      - name: Verify signed byte-range playback
+        run: |
+          set -euo pipefail
+          url="$(cat /tmp/signed-url.txt)"
+          code="$(curl --show-error --silent --range 0-99 \
+            -D /tmp/range-headers.txt -o /tmp/range-body.bin \
+            -w '%{http_code}' "$url")"
+          echo "Range status: $code"
+          test "$code" = 206
+          grep -iq '^content-range: bytes 0-99/' /tmp/range-headers.txt
+          test "$(wc -c </tmp/range-body.bin)" -eq 100
