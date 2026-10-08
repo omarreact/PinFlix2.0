@@ -139,6 +139,7 @@ export default function VideoPlayer({
   return (
     <section
       aria-label="PinFlix video player"
+      data-theater-mode={isTheaterMode}
       className={isTheaterMode
         ? "fixed inset-0 z-[80] flex w-screen flex-col items-center gap-3 overflow-y-auto bg-black/95 px-3 py-8 backdrop-blur-sm sm:px-8"
         : "flex w-full flex-col gap-3"}
