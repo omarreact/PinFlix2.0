@@ -2,6 +2,7 @@ import Footer, { CtaBanner } from "@/components/Footer";
 import Hero from "@/components/Hero";
 import Navbar from "@/components/Navbar";
 import Row from "@/components/Row";
+import ContinueWatching from "@/components/ContinueWatching";
 
 export default function Home() {
   return (
@@ -9,6 +10,7 @@ export default function Home() {
       <Navbar />
       <Hero />
       <main className="relative z-10 -mt-16 flex flex-col gap-5 pb-4 sm:-mt-24 sm:gap-8">
+        <ContinueWatching />
         <Row
           title="Trending Movies"
           path="/trending/movie/week"
