@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Film, Loader2, RotateCcw, PlayCircle } from "lucide-react";
 import type { Video } from "@/lib/tmdb";
 import { getProgress, saveProgress, type LibraryTitle } from "@/lib/library";
@@ -89,8 +89,7 @@ function MediaPlayer({ source, item, season, episode, onFailure }: {
       video.removeAttribute("src");
       video.load();
     };
-  }, [source.url, source.kind, playbackUrl, item.type, item.id, item.title,
-    item.year, item.posterPath, season, episode]);
+  }, [source.url, source.kind, playbackUrl, item, season, episode]);
 
   return <video ref={ref} controls autoPlay playsInline preload="metadata"
     className="h-full w-full bg-black" aria-label={item.title} />;
@@ -114,7 +113,10 @@ export default function VideoPlayer({
   const [failed, setFailed] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [trailerMode, setTrailerMode] = useState<string | null>(null);
-  const item: LibraryTitle = { type, id: tmdbId, title, year, posterPath: posterPath ?? null };
+  const item: LibraryTitle = useMemo(
+    () => ({ type, id: tmdbId, title, year, posterPath: posterPath ?? null }),
+    [type, tmdbId, title, year, posterPath],
+  );
 
   useEffect(() => {
     const ac = new AbortController();
