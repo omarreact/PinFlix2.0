@@ -24,6 +24,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
   --color-surface: var(--surface);
   --color-surface-elevated: var(--surface-elevated);
   --font-sans: var(--font-manrope), system-ui, sans-serif;
