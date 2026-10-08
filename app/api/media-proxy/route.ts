@@ -8,16 +8,9 @@ function allowedHosts() {
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
-  const defaults = [
-    "vod.cineplexbd.net",
-    "cineplexbd.net",
-    "cds3.cineplexbd.net",
-    "demo.unified-streaming.com",
-    "test-streams.mux.dev",
-    "vjs.zencdn.net",
-    "cph-p2p-msl.akamaized.net",
-  ];
-  return new Set([...configured, ...defaults]);
+  // No implicit third-party or ISP origins: each media host needs explicit
+  // operator approval via MEDIA_PROXY_ALLOWED_HOSTS.
+  return new Set(configured);
 }
 
 function parseAllowedUrl(value: string) {
@@ -30,6 +23,13 @@ function parseAllowedUrl(value: string) {
   }
 
   const host = url.hostname.toLowerCase();
+  // Reject loopback/private IP literals and private hostnames even if mistakenly
+  // configured. DNS-rebinding prevention also requires an egress policy upstream.
+  if (host === "localhost" || host.endsWith(".localhost") ||
+      host.endsWith(".local") || host.endsWith(".internal") ||
+      /^\d+(?:\.\d+){3}$/.test(host) || host.includes(":")) {
+    throw new Error("Non-public media hostname");
+  }
   if (!allowedHosts().has(host)) {
     throw new Error("Media host is not allowlisted");
   }
