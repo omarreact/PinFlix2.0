@@ -102,3 +102,31 @@ invalidates previously issued URLs.
 
 Never use a Vercel serverless proxy to continuously transfer large video files
 where direct signed Cloudflare URLs suffice; doing so increases Vercel bandwidth.
+
+## Public-use catalog (no Vercel credentials required)
+
+`GET /public-resolve?key=movie%3A123` looks only in R2 object
+`catalog-public/movie:123.json`. That manifest must contain
+`"public": true` and a `sources` array referencing real, authorized
+`media/...` assets, such as:
+
+```json
+{"public":true,"sources":[{"label":"Publicly licensed MP4","path":"media/movie/123.mp4"}]}
+```
+
+PinFlix's `/api/media/master` uses the Cloudflare public catalog automatically
+if `MEDIA_CATALOG_URL` is not set. This does not expose the restricted
+`catalog/` namespace. Only intentionally published assets are available.
+No commercial movie files were added, and missing titles return unavailable.
+
+`GET https://media.pincodeit.com/diagnostic` provides time-limited MP4 and
+HLS playback links for an original synthetic video clip, not a movie.
+
+A separate `.github/workflows/media-edge-smoke.yml` tests public internet
+reachability, signature verification, MP4/byte-range delivery and HLS
+playlist-to-segment delivery on GitHub Actions.
+
+Private media catalogs still require `CATALOG_TOKEN` on the Worker and a
+matching Vercel `MEDIA_CATALOG_TOKEN`, which cannot currently be configured
+through the Vercel connection (404 project access). Leave private access
+fail-closed until those permissions are restored.
