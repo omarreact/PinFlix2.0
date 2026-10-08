@@ -17,14 +17,15 @@ const registry = own as Registry;
  * The media catalog is an OWNER-CONFIGURED, licensed media API.
  * TMDB contains metadata, never playable video URLs.
  */
-function hostAllowed(host: string, source: "local" | "remote"): boolean {
+function hostAllowed(host: string, source: "local" | "remote" | "public"): boolean {
+  if (source === "public") return host === "media.pincodeit.com";
   const configured = (process.env.MEDIA_SOURCE_ALLOWED_HOSTS ?? "")
     .split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
   return source === "local" ? configured.length === 0 || configured.includes(host) :
     configured.includes(host); // Remote API requires an explicit media host allowlist.
 }
 
-function normalize(input: unknown, origin: "local" | "remote"): Source[] {
+function normalize(input: unknown, origin: "local" | "remote" | "public"): Source[] {
   if (!Array.isArray(input)) return [];
   return input.slice(0, 30).flatMap((entry: Item) => {
     if (!entry || typeof entry !== "object" ||
@@ -46,8 +47,11 @@ function normalize(input: unknown, origin: "local" | "remote"): Source[] {
 
 async function licensedCatalog(key: string, type: "movie" | "tv", id: string,
   season: string | null, episode: string | null): Promise<Source[]> {
-  const endpoint = process.env.MEDIA_CATALOG_URL;
-  if (!endpoint) return [];
+  const configuredEndpoint = process.env.MEDIA_CATALOG_URL?.trim();
+  // First-party public-use content is independently opt-in at the Cloudflare
+  // media edge; private catalog requests still require a server-side token.
+  const endpoint = configuredEndpoint || "https://media.pincodeit.com/public-resolve";
+  const publicCatalog = !configuredEndpoint;
   try {
     const url = new URL(endpoint);
     if (url.protocol !== "https:" || url.username || url.password) return [];
@@ -58,15 +62,15 @@ async function licensedCatalog(key: string, type: "movie" | "tv", id: string,
       url.searchParams.set("season", season!);
       url.searchParams.set("episode", episode!);
     }
-    const token = process.env.MEDIA_CATALOG_TOKEN;
+    const token = publicCatalog ? undefined : process.env.MEDIA_CATALOG_TOKEN;
     const result = await fetch(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
-      signal: AbortSignal.timeout(7000),
+      signal: AbortSignal.timeout(publicCatalog ? 3500 : 7000),
       cache: "no-store",
     });
     if (!result.ok) return [];
     const data: unknown = await result.json();
-    return normalize((data as { sources?: unknown })?.sources, "remote");
+    return normalize((data as { sources?: unknown })?.sources, publicCatalog ? "public" : "remote");
   } catch { return []; }
 }
 
