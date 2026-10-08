@@ -136,7 +136,7 @@ export default function VideoPlayer({
             title={`${activeServer.name} player: ${title || id}`}
             allowFullScreen
             allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
             referrerPolicy="strict-origin-when-cross-origin"
           />
         )}
