@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import Image from "@/components/TmdbImage";
 import Link from "next/link";
 import { Play, Star } from "lucide-react";
 import {
