@@ -3,6 +3,17 @@
 import { useEffect, useState } from "react";
 import { Heart, Plus, Share2, Check, Star } from "lucide-react";
 import { isSaved, setWatchlist, type LibraryTitle } from "@/lib/library";
+import { syncWatchlistToCloud } from "@/lib/cloud-library";
+import { useAuth } from "@/components/AuthProvider";
+import {
+  collection,
+  addDoc,
+  query,
+  where,
+  onSnapshot,
+  orderBy,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 const read = <T,>(key: string, fallback: T): T => {
   try {
@@ -12,16 +23,25 @@ const read = <T,>(key: string, fallback: T): T => {
   }
 };
 
-/** Like / Watchlist / Share, persisted in localStorage. */
-export function ActionBar({ storageId, item }: { storageId: string; item: LibraryTitle }) {
+/** Like / Watchlist / Share, with optional Firebase cloud sync. */
+export function ActionBar({
+  storageId,
+  item,
+}: {
+  storageId: string;
+  item: LibraryTitle;
+}) {
   const [liked, setLiked] = useState(() => read(`like:${storageId}`, false));
   const [saved, setSaved] = useState(false);
+
   useEffect(() => {
     const legacyKey = `list:${storageId}`;
-    // One-time migration: remove the legacy flag so removing an item stays removed.
     const restore = () => {
       const legacy = read(legacyKey, false);
-      if (legacy && !isSaved(item)) setWatchlist(item, true);
+      if (legacy && !isSaved(item)) {
+        setWatchlist(item, true);
+        void syncWatchlistToCloud(item, true);
+      }
       window.localStorage.removeItem(legacyKey);
       setSaved(isSaved(item));
     };
@@ -35,12 +55,14 @@ export function ActionBar({ storageId, item }: { storageId: string; item: Librar
       window.removeEventListener("storage", sync);
     };
   }, [storageId, item]);
+
   const [copied, setCopied] = useState(false);
 
   const toggle = (k: string, v: boolean, set: (b: boolean) => void) => {
     set(!v);
     localStorage.setItem(k, JSON.stringify(!v));
   };
+
   const share = async () => {
     const url = window.location.href;
     if (navigator.share) await navigator.share({ url }).catch(() => {});
@@ -50,12 +72,14 @@ export function ActionBar({ storageId, item }: { storageId: string; item: Librar
       setTimeout(() => setCopied(false), 1800);
     }
   };
+
   const btn =
     "flex items-center gap-2 rounded-lg border border-white/15 bg-zinc-900 px-4 py-2 text-xs font-semibold transition hover:bg-zinc-800";
 
   return (
     <div className="flex flex-wrap gap-2">
       <button
+        type="button"
         onClick={() => toggle(`like:${storageId}`, liked, setLiked)}
         className={btn}
       >
@@ -63,17 +87,19 @@ export function ActionBar({ storageId, item }: { storageId: string; item: Librar
         {liked ? "Liked" : "Like"}
       </button>
       <button
+        type="button"
         onClick={() => {
-          setWatchlist(item, !saved);
-          setSaved(!saved);
-
+          const nextSaved = !saved;
+          setWatchlist(item, nextSaved);
+          setSaved(nextSaved);
+          void syncWatchlistToCloud(item, nextSaved);
         }}
         className={btn}
       >
         {saved ? <Check size={14} className="text-accent" /> : <Plus size={14} />}
         Watchlist
       </button>
-      <button onClick={share} className={btn}>
+      <button type="button" onClick={share} className={btn}>
         <Share2 size={14} /> {copied ? "Link copied" : "Share"}
       </button>
     </div>
@@ -87,33 +113,104 @@ interface Review {
   at: number;
 }
 
-/** Review form; reviews are stored locally in this browser. */
-export function Reviews({ storageId, title }: { storageId: string; title: string }) {
+/** Review form; reviews sync to Firebase Firestore and local browser storage. */
+export function Reviews({
+  storageId,
+  title,
+}: {
+  storageId: string;
+  title: string;
+}) {
+  const { user } = useAuth();
   const key = `reviews:${storageId}`;
-  const [reviews, setReviews] = useState<Review[]>(() => read(key, []));
+  const [localReviews, setLocalReviews] = useState<Review[]>(() => read(key, []));
+  const [cloudReviews, setCloudReviews] = useState<Review[]>([]);
   const [rating, setRating] = useState(0);
   const [text, setText] = useState("");
-  const [name, setName] = useState("");
+  const [name, setName] = useState(user?.displayName || "");
 
-  const submit = (e: React.FormEvent) => {
+  // Real-time Firestore reviews listener
+  useEffect(() => {
+    try {
+      const q = query(
+        collection(db, "reviews"),
+        where("storageId", "==", storageId),
+        orderBy("createdAt", "desc"),
+      );
+      const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const results: Review[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            results.push({
+              name: data.authorName || "Viewer",
+              rating: data.rating || 5,
+              text: data.text || "",
+              at: data.createdAt || Date.now(),
+            });
+          });
+          setCloudReviews(results);
+        },
+        () => {
+          // Fall back gracefully to local reviews on network restrictions
+        },
+      );
+      return () => unsubscribe();
+    } catch {
+      // Ignored
+    }
+  }, [storageId]);
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim() || !name.trim()) return;
-    const next = [{ name, rating, text, at: Date.now() }, ...reviews];
-    setReviews(next);
+    const authorName = (name.trim() || user?.displayName || "Viewer").slice(0, 50);
+    const body = text.trim();
+    if (!body || !authorName) return;
+
+    const newReview: Review = {
+      name: authorName,
+      rating: rating || 5,
+      text: body,
+      at: Date.now(),
+    };
+
+    // Save to Firestore if authenticated
+    if (user) {
+      try {
+        await addDoc(collection(db, "reviews"), {
+          storageId,
+          authorId: user.uid,
+          authorName,
+          rating: rating || 5,
+          text: body,
+          createdAt: Date.now(),
+        });
+      } catch (err) {
+        console.warn("Could not save review to Firestore:", err);
+      }
+    }
+
+    // Always keep local copy
+    const next = [newReview, ...localReviews];
+    setLocalReviews(next);
     localStorage.setItem(key, JSON.stringify(next));
     setText("");
     setRating(0);
   };
+
   const field =
     "w-full rounded-md border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-accent";
+
+  const allReviews = cloudReviews.length > 0 ? cloudReviews : localReviews;
 
   return (
     <section>
       <h3 className="mb-1 text-sm font-bold">
-        Be The First To Review “{title}”
+        Be The First To Review &ldquo;{title}&rdquo;
       </h3>
       <p className="mb-4 text-[11px] text-zinc-500">
-        Reviews are stored locally in your browser. Required fields are marked *
+        Reviews are shared with the PinFlix community. Required fields are marked *
       </p>
       <form onSubmit={submit} className="space-y-4">
         <div>
@@ -152,6 +249,7 @@ export function Reviews({ storageId, title }: { storageId: string; title: string
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
+            placeholder={user?.displayName || "Your name"}
             className={field}
           />
         </div>
@@ -159,16 +257,16 @@ export function Reviews({ storageId, title }: { storageId: string; title: string
           type="submit"
           className="rounded-md bg-accent px-6 py-2 text-xs font-bold text-black transition hover:brightness-110"
         >
-          Submit
+          Submit Review
         </button>
       </form>
 
       <div className="mt-6 space-y-4">
-        {reviews.length === 0 ? (
+        {allReviews.length === 0 ? (
           <p className="text-[11px] text-zinc-500">There are no reviews yet.</p>
         ) : (
-          reviews.map((r) => (
-            <article key={r.at} className="rounded-lg bg-zinc-900 p-4">
+          allReviews.map((r, idx) => (
+            <article key={`${r.at}-${idx}`} className="rounded-lg bg-zinc-900 p-4">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold">{r.name}</span>
                 <span className="flex gap-0.5">

@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, Search, User, X } from "lucide-react";
+import { LogOut, Menu, Search, User, X } from "lucide-react";
 import { img, tmdb, titleOf, yearOf, type Title } from "@/lib/tmdb";
+import { useAuth } from "@/components/AuthProvider";
 
 export const LINKS = [
   { href: "/", label: "Home" },
@@ -43,6 +44,10 @@ export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
 
+  const { user, signInWithGoogle, signOut } = useAuth();
+  const [userDropdown, setUserDropdown] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const on = () => setSolid(window.scrollY > 24);
     on();
@@ -51,8 +56,10 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    const away = (e: MouseEvent) =>
-      !wrap.current?.contains(e.target as Node) && setFocus(false);
+    const away = (e: MouseEvent) => {
+      if (!wrap.current?.contains(e.target as Node)) setFocus(false);
+      if (!userMenuRef.current?.contains(e.target as Node)) setUserDropdown(false);
+    };
     document.addEventListener("mousedown", away);
     return () => document.removeEventListener("mousedown", away);
   }, []);
@@ -197,6 +204,75 @@ export default function Navbar() {
                   </ul>
                 )}
               </div>
+            )}
+          </div>
+
+          <div ref={userMenuRef} className="relative hidden sm:block">
+            {user ? (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setUserDropdown(!userDropdown)}
+                  aria-label="User account menu"
+                  aria-expanded={userDropdown}
+                  className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-accent text-[#0b100e] font-bold text-xs transition hover:scale-105"
+                >
+                  {user.photoURL ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={user.photoURL}
+                      alt={user.displayName || "User"}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span>
+                      {(user.displayName || user.email || "U").charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </button>
+
+                {userDropdown && (
+                  <div className="glass absolute right-0 top-12 w-56 rounded-2xl p-2 shadow-2xl">
+                    <div className="border-b border-white/10 px-3 py-2 text-xs">
+                      <p className="font-bold text-white truncate">
+                        {user.displayName || "PinFlix Member"}
+                      </p>
+                      <p className="text-[11px] text-zinc-400 truncate">
+                        {user.email || "Anonymous Guest"}
+                      </p>
+                    </div>
+
+                    <div className="py-1">
+                      <Link
+                        href="/my-list"
+                        onClick={() => setUserDropdown(false)}
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-zinc-300 transition hover:bg-white/10 hover:text-white"
+                      >
+                        <User size={14} /> My Library
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserDropdown(false);
+                          void signOut();
+                        }}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-rose-400 transition hover:bg-rose-500/10"
+                      >
+                        <LogOut size={14} /> Sign Out
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void signInWithGoogle()}
+                className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-200 transition hover:bg-white/10 hover:text-white"
+              >
+                <User size={14} />
+                <span>Sign In</span>
+              </button>
             )}
           </div>
 

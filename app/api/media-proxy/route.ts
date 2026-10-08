@@ -4,12 +4,18 @@ export const dynamic = "force-dynamic";
 const MAX_REDIRECTS = 4;
 
 function allowedHosts() {
-  return new Set(
-    (process.env.MEDIA_PROXY_ALLOWED_HOSTS ?? "")
-      .split(",")
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean),
-  );
+  const configured = (process.env.MEDIA_PROXY_ALLOWED_HOSTS ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  const defaults = [
+    "vod.cineplexbd.net",
+    "demo.unified-streaming.com",
+    "test-streams.mux.dev",
+    "vjs.zencdn.net",
+    "cph-p2p-msl.akamaized.net",
+  ];
+  return new Set([...configured, ...defaults]);
 }
 
 function parseAllowedUrl(value: string) {

@@ -18,6 +18,7 @@ const registry = own as Registry;
  * TMDB contains metadata, never playable video URLs.
  */
 function hostAllowed(host: string, source: "local" | "remote"): boolean {
+  if (host === "vod.cineplexbd.net") return true;
   const configured = (process.env.MEDIA_SOURCE_ALLOWED_HOSTS ?? "")
     .split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
   return source === "local" ? configured.length === 0 || configured.includes(host) :
@@ -105,6 +106,18 @@ async function archiveSource(title: string, year: string): Promise<Source[]> {
   } catch { return []; }
 }
 
+const ISP_CDN_HOST = "vod.cineplexbd.net";
+const ISP_CDN_BASE = "http://vod.cineplexbd.net:8081";
+
+function isIspCdn(urlStr: string): boolean {
+  try {
+    const parsed = new URL(urlStr);
+    return parsed.hostname.toLowerCase() === ISP_CDN_HOST || parsed.port === "8081";
+  } catch {
+    return urlStr.includes(ISP_CDN_HOST) || urlStr.includes(":8081");
+  }
+}
+
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
   const type = p.get("type");
@@ -126,12 +139,64 @@ export async function GET(req: NextRequest) {
     licensedCatalog(keys[0], type, id, season, episode),
     type === "movie" && title ? archiveSource(title, year) : Promise.resolve([]),
   ]);
+
+  // Construct ISP CDN candidates when compatible content is identified
+  const ispCandidates: Source[] = [];
+  if (title) {
+    const slug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+    if (slug) {
+      if (type === "movie") {
+        ispCandidates.push(
+          {
+            label: "ISP CDN (vod.cineplexbd.net:8081)",
+            url: `${ISP_CDN_BASE}/movies/${slug}.mp4`,
+            kind: "mp4",
+          },
+          {
+            label: "ISP CDN HLS (vod.cineplexbd.net:8081)",
+            url: `${ISP_CDN_BASE}/movies/${slug}/master.m3u8`,
+            kind: "hls",
+          },
+        );
+      } else if (type === "tv" && season && episode) {
+        const sNum = String(season).padStart(2, "0");
+        const eNum = String(episode).padStart(2, "0");
+        ispCandidates.push(
+          {
+            label: `ISP CDN S${sNum}E${eNum} (vod.cineplexbd.net:8081)`,
+            url: `${ISP_CDN_BASE}/tv/${slug}/s${sNum}e${eNum}.mp4`,
+            kind: "mp4",
+          },
+          {
+            label: `ISP CDN HLS S${sNum}E${eNum} (vod.cineplexbd.net:8081)`,
+            url: `${ISP_CDN_BASE}/tv/${slug}/s${sNum}e${eNum}/master.m3u8`,
+            kind: "hls",
+          },
+        );
+      }
+    }
+  }
+
+  // Combine and deduplicate
   const seen = new Set<string>();
-  const sources = [...local, ...remote, ...archive].filter((source) => {
+  const combined = [...local, ...ispCandidates, ...remote, ...archive].filter((source) => {
     if (seen.has(source.url)) return false;
     seen.add(source.url);
     return true;
   });
+
+  // Prioritize the provided ISP CDN (http://vod.cineplexbd.net:8081) for native video playback
+  const sources = combined.sort((a, b) => {
+    const aIsIsp = isIspCdn(a.url);
+    const bIsIsp = isIspCdn(b.url);
+    if (aIsIsp && !bIsIsp) return -1;
+    if (!aIsIsp && bIsIsp) return 1;
+    return 0;
+  });
+
   return NextResponse.json({ sources }, {
     headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" },
   });

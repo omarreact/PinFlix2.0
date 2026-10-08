@@ -1,0 +1,98 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile metadata",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "Display name" },
+        "email": { "type": "string", "description": "User email address" },
+        "photoURL": { "type": "string", "description": "Avatar photo URL" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation timestamp" }
+      },
+      "required": ["uid"]
+    },
+    "WatchlistItem": {
+      "title": "WatchlistItem",
+      "description": "Saved movie or series in user watchlist",
+      "type": "object",
+      "properties": {
+        "tmdbId": { "type": "number", "description": "TMDB numeric identifier" },
+        "type": { "type": "string", "enum": ["movie", "tv"], "description": "Media type" },
+        "title": { "type": "string", "description": "Title name" },
+        "posterPath": { "type": "string", "description": "TMDB poster path" },
+        "year": { "type": "string", "description": "Release year" },
+        "addedAt": { "type": "number", "description": "Timestamp when added" }
+      },
+      "required": ["tmdbId", "type", "title"]
+    },
+    "WatchProgress": {
+      "title": "WatchProgress",
+      "description": "Playback progress tracking for resume functionality",
+      "type": "object",
+      "properties": {
+        "tmdbId": { "type": "number", "description": "TMDB numeric identifier" },
+        "type": { "type": "string", "enum": ["movie", "tv"], "description": "Media type" },
+        "title": { "type": "string", "description": "Title name" },
+        "posterPath": { "type": "string", "description": "TMDB poster path" },
+        "year": { "type": "string", "description": "Release year" },
+        "season": { "type": "number", "description": "Season number for TV" },
+        "episode": { "type": "number", "description": "Episode number for TV" },
+        "seconds": { "type": "number", "description": "Current playback position in seconds" },
+        "duration": { "type": "number", "description": "Total duration in seconds" },
+        "completed": { "type": "boolean", "description": "Whether video has been finished" },
+        "updatedAt": { "type": "number", "description": "Timestamp of last playback event" }
+      },
+      "required": ["tmdbId", "type", "title", "seconds", "duration"]
+    },
+    "UserLike": {
+      "title": "UserLike",
+      "description": "Liked title entry",
+      "type": "object",
+      "properties": {
+        "tmdbId": { "type": "number", "description": "TMDB numeric identifier" },
+        "type": { "type": "string", "enum": ["movie", "tv"], "description": "Media type" },
+        "likedAt": { "type": "number", "description": "Timestamp when liked" }
+      },
+      "required": ["tmdbId", "type"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Public title review and rating",
+      "type": "object",
+      "properties": {
+        "tmdbId": { "type": "number", "description": "TMDB numeric identifier" },
+        "type": { "type": "string", "enum": ["movie", "tv"], "description": "Media type" },
+        "authorId": { "type": "string", "description": "UID of review author" },
+        "authorName": { "type": "string", "description": "Author display name" },
+        "rating": { "type": "number", "description": "Rating score 1 to 5" },
+        "text": { "type": "string", "description": "Review text body" },
+        "createdAt": { "type": "number", "description": "Timestamp when posted" }
+      },
+      "required": ["tmdbId", "type", "authorId", "authorName", "rating", "text", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Private user account profile"
+    },
+    "/users/{userId}/watchlist/{itemId}": {
+      "schema": "WatchlistItem",
+      "description": "Per-user watchlist collection"
+    },
+    "/users/{userId}/progress/{progressId}": {
+      "schema": "WatchProgress",
+      "description": "Per-user playback resume and history collection"
+    },
+    "/users/{userId}/likes/{titleId}": {
+      "schema": "UserLike",
+      "description": "Per-user liked titles collection"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Public community reviews collection"
+    }
+  }
+}

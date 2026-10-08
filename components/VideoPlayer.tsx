@@ -240,11 +240,17 @@ export default function VideoPlayer({
     return () => controller.abort();
   }, [mediaKey, type, id, validId, currentSeason, currentEpisode, title, year, refreshKey]);
 
-  // Combined native sources (custom added + API verified)
+  // Combined native sources with ISP CDN (vod.cineplexbd.net:8081) strictly prioritized first
   const currentNativeSources = [
     ...customSources,
     ...(resolved.key === mediaKey ? resolved.sources : []),
-  ];
+  ].sort((a, b) => {
+    const aIsIsp = a.url.includes("vod.cineplexbd.net") || a.url.includes(":8081");
+    const bIsIsp = b.url.includes("vod.cineplexbd.net") || b.url.includes(":8081");
+    if (aIsIsp && !bIsIsp) return -1;
+    if (!aIsIsp && bIsIsp) return 1;
+    return 0;
+  });
 
   // Theater Mode / Lights Off body scroll & escape listener
   useEffect(() => {
@@ -392,7 +398,9 @@ export default function VideoPlayer({
             </span>
             <span className="rounded-md border border-white/10 bg-zinc-900 px-2 py-0.5 text-[11px] font-medium text-zinc-300">
               {activeMode === "native"
-                ? "Native Player"
+                ? activeNativeSource?.url.includes("vod.cineplexbd.net")
+                  ? "⚡ ISP CDN (BDIX Prioritized)"
+                  : "Native Player"
                 : activeMode === "trailer"
                   ? "YouTube Trailer"
                   : activeMirror?.name || "Mirror"}
@@ -576,7 +584,17 @@ export default function VideoPlayer({
               >
                 <Tv size={14} />
                 <span>Native Player (HLS/MP4)</span>
-                {currentNativeSources.length > 0 && (
+                {currentNativeSources.some((s) => s.url.includes("vod.cineplexbd.net")) ? (
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                      activeMode === "native"
+                        ? "bg-black/20 text-[#0b100e]"
+                        : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                    }`}
+                  >
+                    ⚡ ISP Prioritized
+                  </span>
+                ) : currentNativeSources.length > 0 ? (
                   <span
                     className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
                       activeMode === "native"
@@ -586,7 +604,7 @@ export default function VideoPlayer({
                   >
                     {currentNativeSources.length} direct
                   </span>
-                )}
+                ) : null}
               </button>
 
               {/* Official Trailer Tab */}
@@ -757,13 +775,26 @@ export default function VideoPlayer({
               onSubmit={handleAddCustomStream}
               className="mt-1 rounded-xl border border-white/15 bg-zinc-900/90 p-3"
             >
-              <p className="mb-2 text-xs font-semibold text-zinc-200">
-                Add Authorized Direct Stream (.m3u8 HLS or .mp4)
-              </p>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-zinc-200">
+                  Add Direct Stream (.m3u8 HLS or .mp4)
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCustomUrlInput(
+                      `http://vod.cineplexbd.net:8081/movies/${title ? title.toLowerCase().replace(/[^a-z0-9]+/g, "-") : id}.mp4`,
+                    )
+                  }
+                  className="rounded-md border border-accent/30 bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent hover:bg-accent/20"
+                >
+                  ⚡ Fill ISP CDN (vod.cineplexbd.net:8081)
+                </button>
+              </div>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   type="url"
-                  placeholder="https://example.com/video/master.m3u8"
+                  placeholder="http://vod.cineplexbd.net:8081/movies/example.mp4"
                   value={customUrlInput}
                   onChange={(e) => setCustomUrlInput(e.target.value)}
                   className="flex-1 rounded-lg border border-white/15 bg-black px-3 py-2 text-xs text-white outline-none focus:border-accent"
@@ -772,9 +803,12 @@ export default function VideoPlayer({
                   type="submit"
                   className="rounded-lg bg-accent px-4 py-2 text-xs font-bold text-black transition hover:bg-accent-soft"
                 >
-                  Play Native Stream
+                  Play Direct Stream
                 </button>
               </div>
+              <p className="mt-1.5 text-[11px] text-zinc-400">
+                ISP CDN server: <code className="text-accent">http://vod.cineplexbd.net:8081</code> (BDIX unmetered playback).
+              </p>
               {customError && (
                 <p className="mt-2 flex items-center gap-1 text-[11px] text-rose-400">
                   <AlertCircle size={12} />
