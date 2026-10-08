@@ -142,7 +142,7 @@ export default function VideoPlayer({
   }, [reqKey, type, tmdbId, title, year, season, episode]);
 
   const loading = loaded?.key !== reqKey;
-  const sources = loading ? [] : loaded.sources;
+  const sources = loading ? [] : (loaded?.sources ?? []);
   const selected = choice.key === reqKey ? choice.index : 0;
   const active = sources[selected] ?? sources[0];
   const error = failed === `${reqKey}:${selected}`;
