@@ -210,7 +210,7 @@ export default function VideoPlayer({
     if (!validId) return;
     const controller = new AbortController();
 
-    const request = new URL("/api/sources", window.location.origin);
+    const request = new URL("/api/media/master", window.location.origin);
     request.searchParams.set("type", type);
     request.searchParams.set("id", id);
     if (title) request.searchParams.set("title", title);
