@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import Image from "@/components/TmdbImage";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, Clock, Play, Star } from "lucide-react";
+import { ChevronDown, Clock, Play, SkipForward, Star } from "lucide-react";
 import Footer, { CtaBanner } from "@/components/Footer";
 import Navbar from "@/components/Navbar";
 import PopularList from "@/components/PopularList";
 import Row from "@/components/Row";
 import { ActionBar, Reviews } from "@/components/Social";
 import VideoPlayer from "@/components/VideoPlayer";
+import { getNextEpisode } from "@/lib/episode-navigation";
 import WatchProviders from "@/components/WatchProviders";
 import {
   img,
@@ -127,6 +128,7 @@ export default function TitleView({
   const backdrop = img(d.backdrop_path, "original");
   const runtime = d.runtime ?? d.episode_run_time?.[0];
   const seasons = (d.seasons ?? []).filter((s) => s.season_number > 0);
+  const nextEpisode = type === "tv" ? getNextEpisode(season, episode, seasons) : null;
   const currentEp = episodes.find((e) => e.episode_number === episode);
   const label = type === "tv" ? "TV Shows" : "Movies";
   const director = d.credits?.crew?.find((c) => c.job === "Director");
@@ -166,11 +168,26 @@ export default function TitleView({
                     Watch Now
                   </h2>
                 </div>
-                <p className="text-xs font-medium text-zinc-400">
-                  {type === "tv"
-                    ? `Season ${season} · Episode ${episode}`
-                    : "Movie"}
-                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="text-xs font-medium text-zinc-400">
+                    {type === "tv"
+                      ? `Season ${season} · Episode ${episode}`
+                      : "Movie"}
+                  </p>
+                  {showPlayer && nextEpisode && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSelection(nextEpisode.season, nextEpisode.episode, true)
+                      }
+                      aria-label={`Play season ${nextEpisode.season}, episode ${nextEpisode.episode}`}
+                      className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    >
+                      Next Episode
+                      <SkipForward size={14} aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
               </div>
               {showPlayer ? (
                 <VideoPlayer
@@ -238,6 +255,7 @@ export default function TitleView({
                         onClick={() => {
                           updateSelection(season, e.episode_number, true);
                         }}
+                        aria-current={e.episode_number === episode ? "true" : undefined}
                         className={`flex w-full gap-3 rounded-lg p-2 text-left transition ${
                           e.episode_number === episode
                             ? "bg-accent/15 ring-1 ring-accent"
