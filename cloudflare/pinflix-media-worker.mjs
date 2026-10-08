@@ -98,23 +98,32 @@ async function rewritePlaylist(body, url, env, exp) {
   }
   return output.join("\n");
 }
-async function catalogResponse(request, env, url) {
-  if (!env.CATALOG_TOKEN || !env.SIGNING_KEY || !env.MEDIA) {
+async function catalogResponse(request, env, url, isPublic = false) {
+  if (!env.SIGNING_KEY || !env.MEDIA || (!isPublic && !env.CATALOG_TOKEN)) {
     return reply(request, env, { error: "Catalog not configured" }, 503);
   }
-  const supplied = request.headers.get("authorization") || "";
-  if (!safeEqual(supplied, "Bearer " + env.CATALOG_TOKEN)) {
-    return reply(request, env, { error: "Unauthorized" }, 401);
+  if (!isPublic) {
+    const supplied = request.headers.get("authorization") || "";
+    if (!safeEqual(supplied, "Bearer " + env.CATALOG_TOKEN)) {
+      return reply(request, env, { error: "Unauthorized" }, 401);
+    }
   }
   const key = url.searchParams.get("key") || "";
   if (!CATALOG_KEY.test(key)) return reply(request, env, { error: "Invalid selection" }, 400);
-  const file = await env.MEDIA.get("catalog/" + key + ".json");
+  // Public and private catalogs are stored in isolated R2 prefixes.
+  // A public manifest must additionally opt into publication.
+  const file = await env.MEDIA.get((isPublic ? "catalog-public/" : "catalog/") + key + ".json");
   if (!file) return reply(request, env, { sources: [] });
   if (file.size > 65536) return reply(request, env, { error: "Catalog entry too large" }, 422);
   let document;
   try { document = await file.json(); } catch { return reply(request, env, { error: "Invalid catalog entry" }, 422); }
   if (!document || !Array.isArray(document.sources)) {
     return reply(request, env, { error: "Invalid catalog format" }, 422);
+  }
+  // Explicit public-use opt-in prevents a private catalog being published
+  // by accidental key reuse or a copied manifest.
+  if (isPublic && document.public !== true) {
+    return reply(request, env, { sources: [] });
   }
   const exp = Math.floor(Date.now() / 1000) + MAX_AGE_SECONDS;
   const sources = [];
@@ -198,6 +207,7 @@ export default {
       });
     }
     if (url.pathname === "/resolve" && request.method === "GET") return catalogResponse(request, env, url);
+    if (url.pathname === "/public-resolve" && request.method === "GET") return catalogResponse(request, env, url, true);
     if (url.pathname.startsWith("/m/")) {
       try { return await mediaResponse(request, env, url); }
       catch { return reply(request, env, { error: "Media unavailable" }, 502); }
