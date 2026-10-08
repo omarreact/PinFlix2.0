@@ -21,7 +21,18 @@ import {
   type Episode,
 } from "@/lib/tmdb";
 
-export default function TitleView() {
+interface TvPlaybackParams {
+  tmdbId: string;
+  season: number;
+  episode: number;
+  play: boolean;
+}
+
+export default function TitleView({
+  tvPlayback,
+}: {
+  tvPlayback?: TvPlaybackParams;
+}) {
   const { type, id } = useParams<{ type: "movie" | "tv"; id: string }>();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -31,10 +42,21 @@ export default function TitleView() {
   const safeNumber = (n: number) => Number.isSafeInteger(n) && n > 0 && n <= 999 ? n : 1;
   const [d, setD] = useState<Details | null>(null);
   const [error, setError] = useState(false);
-  const showPlayer = playParam === "1";
-  const season = safeNumber(urlSeason);
+  // Server-provided values are authoritative when they match this URL.
+  // Fall back to the live URL state during client-side route transitions.
+  const routeSeason = safeNumber(urlSeason);
+  const routeEpisode = safeNumber(urlEpisode);
+  const routePlay = playParam === "1";
+  const matchingTvRoute =
+    type === "tv" &&
+    tvPlayback?.tmdbId === id &&
+    tvPlayback.season === routeSeason &&
+    tvPlayback.episode === routeEpisode &&
+    tvPlayback.play === routePlay;
+  const showPlayer = matchingTvRoute ? tvPlayback.play : routePlay;
+  const season = matchingTvRoute ? tvPlayback.season : routeSeason;
   const [episodes, setEpisodes] = useState<Episode[]>([]);
-  const episode = safeNumber(urlEpisode);
+  const episode = matchingTvRoute ? tvPlayback.episode : routeEpisode;
 
   const updateSelection = (nextSeason: number, nextEpisode: number, play: boolean) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -152,8 +174,8 @@ export default function TitleView() {
               </div>
               {showPlayer ? (
                 <VideoPlayer
-                  type={type}
-                  tmdbId={d.id}
+                  type={matchingTvRoute ? "tv" : type}
+                  tmdbId={matchingTvRoute ? tvPlayback.tmdbId : d.id}
                   title={titleOf(d)}
                   year={yearOf(d)}
                   season={type === "tv" ? season : undefined}
