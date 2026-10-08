@@ -31,6 +31,27 @@ npm run build
 Set `TMDB_API_KEY` on the Vercel project (server-only, **not** NEXT_PUBLIC).
 Only add media from an origin you own or have a license to distribute.
 
+## Ad-free native playback
+
+PinFlix's Watch Now area uses a browser-native video element for owner-provided MP4
+and HLS streams. It does not automatically play third-party iframe embeds or
+claim to remove ads from someone else's video service. Multiple permitted
+sources can be selected manually, and the player tries another listed source
+when one fails.
+
+**Default limitation:** The included `data/own-sources.json` contains only a
+placeholder, and the deployed project needs `MEDIA_CATALOG_URL` and a
+permitted source-host allowlist to discover full-length content dynamically.
+Without a real licensed media catalog, movies and episodes show a clear
+unavailable message with an official trailer option rather than pretending
+that TMDB metadata provides video.
+
+`HTTPS` HLS streams must allow browser CORS access (including segments and keys).
+`HTTP` is routed through `/api/media-proxy` and requires explicit
+`MEDIA_PROXY_ALLOWED_HOSTS`; that path uses Vercel transfer bandwidth.
+The player does not insert third-party iframe ads, although the media origin
+is responsible for any ads baked into the stream itself.
+
 ## Configuring full-length playback
 
 PinFlix has two authorized media source registries:
