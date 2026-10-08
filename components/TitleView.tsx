@@ -130,7 +130,26 @@ export default function TitleView() {
         <main className="relative mx-auto w-full max-w-7xl px-4 pt-20 sm:px-8 sm:pt-24">
           {/* Player + episodes / poster */}
           <div className="animate-fade-up grid gap-6 lg:grid-cols-[1fr_340px]">
-            <section id="player" className="scroll-mt-24">
+            <section
+              id="player"
+              aria-label="Watch player"
+              className="scroll-mt-24 rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.055] to-white/[0.015] p-3 shadow-[0_20px_60px_rgba(0,0,0,0.25)] sm:p-4"
+            >
+              <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-accent">
+                    PinFlix player
+                  </p>
+                  <h2 className="mt-1 font-display text-xl font-bold text-white sm:text-2xl">
+                    Watch Now
+                  </h2>
+                </div>
+                <p className="text-xs font-medium text-zinc-400">
+                  {type === "tv"
+                    ? `Season ${season} · Episode ${episode}`
+                    : "Movie"}
+                </p>
+              </div>
               {showPlayer ? (
                 <VideoPlayer
                   type={type}
