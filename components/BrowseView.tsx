@@ -230,7 +230,7 @@ export default function BrowseView() {
               {loading
                 ? Array.from({ length: 12 }).map((_, i) => (
                     <div key={i}>
-                      <div className={`${viewMode === "poster" ? "aspect-[2/3]" : "aspect-video"} animate-pulse rounded-xl bg-surface` />
+                      <div className={`${viewMode === "poster" ? "aspect-[2/3]" : "aspect-video"} animate-pulse rounded-xl bg-surface`} />
                       <div className="mt-3 h-3 w-2/3 animate-pulse rounded bg-zinc-800" />
                     </div>
                   ))
