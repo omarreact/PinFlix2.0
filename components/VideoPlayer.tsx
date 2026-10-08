@@ -91,8 +91,35 @@ function MediaPlayer({ source, item, season, episode, onFailure }: {
     };
   }, [source.url, source.kind, playbackUrl, item, season, episode]);
 
-  return <video ref={ref} controls autoPlay playsInline preload="metadata"
-    className="h-full w-full bg-black" aria-label={item.title} />;
+  // The on-hover title overlay mirrors the supplied watch-player presentation.
+  // It never intercepts pointer events or changes the underlying <video> controls.
+  return (
+    <div className="group relative h-full w-full bg-black">
+      <video
+        ref={ref}
+        controls
+        autoPlay
+        playsInline
+        preload="metadata"
+        poster={item.posterPath
+          ? `https://image.tmdb.org/t/p/w500${item.posterPath}`
+          : undefined}
+        className="h-full w-full bg-black"
+        aria-label={item.title}
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 to-transparent p-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-within:opacity-100 sm:p-6"
+      >
+        <p className="truncate font-display text-base font-bold text-white sm:text-xl">
+          {item.title}
+        </p>
+        <p className="mt-1 truncate text-xs font-medium text-zinc-300">
+          {source.label} · {source.kind.toUpperCase()}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 export default function VideoPlayer({
@@ -168,8 +195,14 @@ export default function VideoPlayer({
     <div className="flex flex-col gap-3">
       <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-white/10 bg-zinc-900 shadow-2xl shadow-black">
         {loading ? (
-          <div className="flex h-full items-center justify-center gap-2 text-zinc-300">
-            <Loader2 className="animate-spin" /> Finding available sources…
+          <div role="status" aria-live="polite" className="flex h-full flex-col items-center justify-center gap-4 text-zinc-300">
+            <div className="relative flex h-16 w-16 items-center justify-center">
+              <div className="absolute inset-0 animate-pulse rounded-full bg-accent/15 blur-lg" />
+              <Loader2 size={36} className="relative animate-spin text-accent" />
+            </div>
+            <p className="text-sm font-semibold tracking-wide">
+              Finding available sources…
+            </p>
           </div>
         ) : showTrailer && trailer ? (
           <iframe key={reqKey + trailer.key}
@@ -205,15 +238,22 @@ export default function VideoPlayer({
       )}
       {(sources.length > 0 || trailer) && !loading && (
         <div className="glass no-scrollbar flex flex-wrap items-center gap-2 rounded-xl p-3">
-          {sources.length > 0 && <span className="mr-1 text-xs text-zinc-400">Streams:</span>}
+          {sources.length > 0 && (
+            <span className="mr-1 shrink-0 text-xs text-zinc-400">
+              Streams · {sources.length}
+            </span>
+          )}
           {sources.map((source, index) => (
             <button key={source.url + index} onClick={() => switchSource(index)}
               aria-pressed={!showTrailer && selected === index}
-              className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+              className={`rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold transition duration-200 hover:-translate-y-px ${
                 !showTrailer && selected === index ? "bg-accent text-black" :
                   "bg-white/10 text-zinc-300 hover:bg-white/20"
               }`}>
-              {source.label}
+              <span>{source.label}</span>
+              <span className="ml-2 text-[10px] font-medium opacity-65">
+                {source.kind.toUpperCase()}
+              </span>
             </button>
           ))}
           {trailer && (
