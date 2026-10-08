@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Expand, Play, RotateCcw, Shrink } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Expand, Film, Play, RotateCcw, Shrink } from "lucide-react";
+import NativeMediaPlayer, { type PlayableSource } from "@/components/NativeMediaPlayer";
 import type { Video } from "@/lib/tmdb";
+import type { LibraryTitle } from "@/lib/library";
 
 interface VideoPlayerProps {
   tmdbId: string | number;
@@ -10,47 +12,17 @@ interface VideoPlayerProps {
   season?: string | number;
   episode?: string | number;
   trailerKey?: string | null;
-  // Keep compatibility with PinFlix's existing TitleView.
   title?: string;
   year?: string;
   posterPath?: string | null;
   videos?: Video[];
 }
 
-interface EmbedProvider {
-  name: string;
-  movie: (id: string) => string;
-  tv: (id: string, season: number, episode: number) => string;
+interface Resolution {
+  key: string;
+  sources: PlayableSource[];
+  status: "ready" | "empty" | "error";
 }
-
-// Streams are embedded directly into the visitor's browser, not proxied
-// through PinFlix. Only embed content you have permission to distribute.
-const PROVIDERS: EmbedProvider[] = [
-  {
-    name: "VidSrc.cc (Best Pick)",
-    movie: (id) => `https://vidsrc.cc/embed/movie/${id}`,
-    tv: (id, season, episode) =>
-      `https://vidsrc.cc/embed/tv/${id}/${season}/${episode}`,
-  },
-  {
-    name: "VidEasy (Up to 4K)",
-    movie: (id) => `https://player.videasy.net/movie/${id}`,
-    tv: (id, season, episode) =>
-      `https://player.videasy.net/tv/${id}/${season}/${episode}`,
-  },
-  {
-    name: "VidSrc.me (Very Stable)",
-    movie: (id) => `https://vidsrc.me/embed/movie?tmdb=${id}`,
-    tv: (id, season, episode) =>
-      `https://vidsrc.me/embed/tv?tmdb=${id}&season=${season}&episode=${episode}`,
-  },
-  {
-    name: "Embed.su (Fast Proxy)",
-    movie: (id) => `https://embed.su/embed/movie/${id}`,
-    tv: (id, season, episode) =>
-      `https://embed.su/embed/tv/${id}/${season}/${episode}`,
-  },
-];
 
 const YOUTUBE_KEY = /^[A-Za-z0-9_-]{11}$/;
 
@@ -61,6 +33,24 @@ function episodeNumber(value: string | number): number {
   return Number.isSafeInteger(n) && n <= 999 ? n : 1;
 }
 
+function validSource(value: unknown): value is PlayableSource {
+  if (!value || typeof value !== "object") return false;
+  const entry = value as Record<string, unknown>;
+  if (typeof entry.label !== "string" ||
+      typeof entry.url !== "string" ||
+      (entry.kind !== "hls" && entry.kind !== "mp4")) return false;
+  try {
+    const url = new URL(entry.url);
+    return (url.protocol === "https:" || url.protocol === "http:") &&
+      !url.username && !url.password &&
+      (entry.kind === "hls" ? /\.m3u8$/i : /\.mp4$/i).test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+/** Direct licensed media, rendered with a local HTML5 player instead of
+ * advertising-supported, uncontrolled third-party iframe players. */
 export default function VideoPlayer({
   tmdbId,
   type = "movie",
@@ -68,189 +58,255 @@ export default function VideoPlayer({
   episode = 1,
   trailerKey = null,
   title,
+  year,
+  posterPath = null,
   videos = [],
 }: VideoPlayerProps) {
   const id = String(tmdbId).trim();
   const currentSeason = episodeNumber(season);
   const currentEpisode = episodeNumber(episode);
-  const mediaKey = `${type}:${id}:${currentSeason}:${currentEpisode}`;
+  const mediaKey = type === "tv"
+    ? `tv:${id}:s${currentSeason}e${currentEpisode}`
+    : `movie:${id}`;
+  const validId = /^[1-9][0-9]*$/.test(id);
 
-  // A changed movie, season or episode immediately resets server and trailer
-  // without setting state in an effect (or flashing the previous embed).
-  const [selection, setSelection] = useState({ mediaKey: "", index: 0 });
+  const [resolved, setResolved] = useState<Resolution | null>(null);
+  const [refreshCount, setRefreshCount] = useState(0);
+  const [selection, setSelection] = useState({ key: "", index: 0 });
+  const [failedStream, setFailedStream] = useState<string | null>(null);
+  const lastError = useRef<string | null>(null);
   const [trailerModeKey, setTrailerModeKey] = useState<string | null>(null);
-  const [shieldRemovedFor, setShieldRemovedFor] = useState<string | null>(null);
   const [isTheaterMode, setIsTheaterMode] = useState(false);
-  const serverIndex = selection.mediaKey === mediaKey ? selection.index : 0;
-  const activeServer = PROVIDERS[serverIndex];
-  const streamKey = `${mediaKey}:${serverIndex}`;
-  const isShieldActive = shieldRemovedFor !== streamKey;
 
-  useEffect(() => {
-    if (!isTheaterMode) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const exitOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsTheaterMode(false);
-    };
-    window.addEventListener("keydown", exitOnEscape);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", exitOnEscape);
-    };
-  }, [isTheaterMode]);
-
-  // Support the new explicit trailerKey prop AND the existing TMDB videos prop.
   const tmdbTrailer = videos
     .filter((video) => video.site === "YouTube" && YOUTUBE_KEY.test(video.key))
     .sort((a, b) => Number(b.type === "Trailer") - Number(a.type === "Trailer"))[0];
-  const resolvedTrailerKey =
-    trailerKey && YOUTUBE_KEY.test(trailerKey) ? trailerKey : tmdbTrailer?.key;
-  const isTrailerMode = Boolean(resolvedTrailerKey && trailerModeKey === mediaKey);
+  const officialTrailer = trailerKey && YOUTUBE_KEY.test(trailerKey)
+    ? trailerKey
+    : tmdbTrailer?.key;
+  const isTrailerMode = Boolean(officialTrailer && trailerModeKey === mediaKey);
 
-  const embedUrl = type === "tv"
-    ? activeServer.tv(id, currentSeason, currentEpisode)
-    : activeServer.movie(id);
+  useEffect(() => {
+    if (!validId) return;
+    const controller = new AbortController();
+    const request = new URL("/api/sources", window.location.origin);
+    request.searchParams.set("type", type);
+    request.searchParams.set("id", id);
+    if (title) request.searchParams.set("title", title);
+    if (year) request.searchParams.set("year", year);
+    if (type === "tv") {
+      request.searchParams.set("season", String(currentSeason));
+      request.searchParams.set("episode", String(currentEpisode));
+    }
 
-  const handleNextServer = () => {
-    setTrailerModeKey(null);
-    setSelection({
-      mediaKey,
-      index: (serverIndex + 1) % PROVIDERS.length,
-    });
+    void fetch(request, { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Media source lookup failed");
+        const data: unknown = await response.json();
+        const entries = data && typeof data === "object" &&
+          "sources" in data ? data.sources : undefined;
+        const sources: PlayableSource[] = Array.isArray(entries)
+          ? entries.filter(validSource)
+          : [];
+        if (!controller.signal.aborted) {
+          setResolved({
+            key: mediaKey,
+            sources,
+            status: sources.length ? "ready" : "empty",
+          });
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setResolved({ key: mediaKey, sources: [], status: "error" });
+        }
+      });
+    return () => controller.abort();
+  }, [mediaKey, type, id, validId, currentSeason, currentEpisode, title, year, refreshCount]);
+
+  useEffect(() => {
+    if (!isTheaterMode) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsTheaterMode(false);
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onEscape);
+    };
+  }, [isTheaterMode]);
+
+  const isLoading = !resolved || resolved.key !== mediaKey;
+  const sources = !isLoading && resolved ? resolved.sources : [];
+  const currentIndex = selection.key === mediaKey ? selection.index : 0;
+  const activeIndex = Math.min(currentIndex, Math.max(0, sources.length - 1));
+  const activeSource = sources[activeIndex];
+  const streamKey = `${mediaKey}:${activeIndex}:${refreshCount}`;
+  const errorForActiveStream = failedStream === streamKey;
+
+  const item: LibraryTitle = {
+    type, id: Number(id), title: title || `Title ${id}`,
+    year: year || "", posterPath,
   };
 
-  const toggleTrailer = () => {
-    setShieldRemovedFor(null);
-    setTrailerModeKey(isTrailerMode ? null : mediaKey);
+  const nextSource = () => {
+    if (sources.length < 2) return;
+    lastError.current = null;
+    setFailedStream(null);
+    setSelection({ key: mediaKey, index: (activeIndex + 1) % sources.length });
   };
 
-  if (!/^[1-9][0-9]*$/.test(id)) {
-    return (
-      <div role="alert" className="rounded-xl bg-zinc-900 p-6 text-center text-sm text-amber-400">
-        Invalid TMDB ID.
-      </div>
-    );
+  const handleFatalError = () => {
+    if (lastError.current === streamKey) return;
+    lastError.current = streamKey;
+    if (activeIndex + 1 < sources.length) {
+      setSelection({ key: mediaKey, index: activeIndex + 1 });
+    } else {
+      setFailedStream(streamKey);
+    }
+  };
+
+  const retrySources = () => {
+    lastError.current = null;
+    setFailedStream(null);
+    setSelection({ key: mediaKey, index: 0 });
+    setResolved(null);
+    setRefreshCount((n) => n + 1);
+  };
+
+  if (!validId) {
+    return <p role="alert" className="rounded-xl bg-zinc-900 p-6 text-amber-400">Invalid TMDB ID.</p>;
   }
 
   return (
     <section
-      aria-label="PinFlix video player"
+      aria-label="PinFlix media player"
       data-theater-mode={isTheaterMode}
       className={isTheaterMode
         ? "fixed inset-0 z-[80] flex w-screen flex-col items-center gap-3 overflow-y-auto bg-black/95 px-3 py-8 backdrop-blur-sm sm:px-8"
         : "flex w-full flex-col gap-3"}
     >
       <div className="relative aspect-video w-full max-w-5xl shrink-0 overflow-hidden rounded-xl bg-black shadow-2xl ring-1 ring-white/10">
-        {isTrailerMode && resolvedTrailerKey ? (
+        {isTrailerMode && officialTrailer ? (
           <iframe
-            key={`trailer:${mediaKey}:${resolvedTrailerKey}`}
-            src={`https://www.youtube-nocookie.com/embed/${resolvedTrailerKey}?rel=0&autoplay=1`}
+            key={`trailer:${mediaKey}:${officialTrailer}`}
+            src={`https://www.youtube-nocookie.com/embed/${officialTrailer}?rel=0&autoplay=1`}
             className="absolute inset-0 h-full w-full border-0"
-            title={`Official trailer: ${title || id}`}
-            allowFullScreen
+            title={`Official trailer: ${item.title}`}
             allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            allowFullScreen
             sandbox="allow-scripts allow-same-origin allow-presentation"
             referrerPolicy="strict-origin-when-cross-origin"
           />
-        ) : (
-          <iframe
-            key={`stream:${mediaKey}:${serverIndex}`}
-            src={embedUrl}
-            className="absolute inset-0 h-full w-full border-0"
-            title={`${activeServer.name} player: ${title || id}`}
-            allowFullScreen
-            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-            referrerPolicy="strict-origin-when-cross-origin"
+        ) : activeSource && !errorForActiveStream ? (
+          <NativeMediaPlayer
+            key={streamKey}
+            source={activeSource}
+            item={item}
+            season={type === "tv" ? currentSeason : undefined}
+            episode={type === "tv" ? currentEpisode : undefined}
+            onFatalError={handleFatalError}
           />
-        )}
-        {!isTrailerMode && isShieldActive && (
-          <button
-            type="button"
-            aria-label="Activate the video player"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              setShieldRemovedFor(streamKey);
-            }}
-            className="absolute inset-0 z-20 flex h-full w-full cursor-pointer flex-col items-center justify-center gap-3 bg-black/45 p-4 text-white transition-colors hover:bg-black/55 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
-          >
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-indigo-600 shadow-xl shadow-indigo-950/60 sm:h-20 sm:w-20">
-              <Play size={32} fill="currentColor" aria-hidden="true" />
-            </span>
-            <span className="rounded-lg border border-white/15 bg-zinc-950/80 px-4 py-2 text-center text-xs font-semibold sm:text-sm">
-              Click to open player controls
-            </span>
-          </button>
+        ) : (
+          <div role="status" className="flex h-full w-full flex-col items-center justify-center gap-3 p-5 text-center">
+            <Film size={32} className="text-zinc-500" aria-hidden="true" />
+            <p className="max-w-md text-sm font-semibold text-white">
+              {isLoading ? "Finding available authorized sources…" :
+                resolved?.status === "error" ? "Unable to look up media sources." :
+                errorForActiveStream ? "This media could not be played from the available sources." :
+                "No ad-free licensed video is configured for this title yet."}
+            </p>
+            {!isLoading && (
+              <p className="max-w-md text-xs leading-relaxed text-zinc-400">
+                Choose an official trailer or use Where to Watch below. TMDB metadata alone does not include a movie or episode stream.
+              </p>
+            )}
+            {!isLoading && (
+              <button
+                type="button"
+                onClick={retrySources}
+                className="mt-2 rounded-lg border border-white/15 bg-zinc-800 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-700"
+              >
+                Retry source lookup
+              </button>
+            )}
+          </div>
         )}
       </div>
 
       <div className="flex w-full max-w-5xl flex-col items-center justify-between gap-4 rounded-lg border border-gray-800 bg-[#111111] p-4 text-sm sm:flex-row">
-        <div aria-live="polite" className="min-w-0 text-center text-gray-400 sm:text-left">
-          {isTrailerMode ? (
-            <p className="font-semibold text-white">
-              Currently Playing:
-              <span className="ml-1 text-red-500">Official Trailer</span>
+        <div aria-live="polite" className="min-w-0 text-center text-zinc-400 sm:text-left">
+          <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+            {isTrailerMode ? "Official preview" : "Current source"}
+          </p>
+          <p className="mt-1 truncate text-sm font-semibold text-emerald-400">
+            {isTrailerMode ? "YouTube Trailer" :
+              activeSource ? activeSource.label :
+              isLoading ? "Checking…" : "No licensed source"}
+          </p>
+          {!isTrailerMode && sources.length > 0 && (
+            <p className="mt-1 text-xs text-zinc-500">
+              Source {activeIndex + 1} of {sources.length} · Native {activeSource.kind.toUpperCase()} video
             </p>
-          ) : (
-            <>
-              <span className="font-semibold text-white">Playing on: </span>
-              <span className="ml-1 font-medium text-emerald-400">{activeServer.name}</span>
-              <span className="ml-2 text-xs text-gray-500">
-                (Server {serverIndex + 1} of {PROVIDERS.length})
-              </span>
-            </>
           )}
         </div>
-
-        <div className="flex w-full flex-wrap justify-center gap-3 sm:w-auto">
+        <div className="flex w-full flex-wrap justify-center gap-2 sm:w-auto">
           <button
             type="button"
-            onClick={() => setIsTheaterMode((value) => !value)}
+            onClick={() => setIsTheaterMode((active) => !active)}
             aria-pressed={isTheaterMode}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-white/15 bg-zinc-800 px-4 py-2.5 font-medium text-white transition-colors hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            className="inline-flex min-h-10 items-center gap-2 rounded-md border border-white/15 bg-zinc-800 px-3 py-2 font-medium text-white hover:bg-zinc-700"
           >
-            {isTheaterMode ? <Shrink size={16} aria-hidden="true" /> : <Expand size={16} aria-hidden="true" />}
+            {isTheaterMode ? <Shrink size={16} /> : <Expand size={16} />}
             {isTheaterMode ? "Exit Theater" : "Theater Mode"}
           </button>
-          {resolvedTrailerKey && (
+          {officialTrailer && (
             <button
               type="button"
-              onClick={toggleTrailer}
+              onClick={() => setTrailerModeKey(isTrailerMode ? null : mediaKey)}
               aria-pressed={isTrailerMode}
-              className={`inline-flex min-h-11 items-center justify-center rounded-md px-4 py-2.5 font-medium text-white shadow-lg transition-all active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${isTrailerMode
-                ? "bg-gray-700 hover:bg-gray-600"
-                : "bg-red-600 hover:bg-red-700"}`}
+              className={`inline-flex min-h-10 items-center gap-2 rounded-md px-4 py-2 font-semibold text-white ${isTrailerMode ? "bg-gray-700 hover:bg-gray-600" : "bg-red-600 hover:bg-red-700"}`}
             >
-              {isTrailerMode ? "Back to Movie" : "Watch Trailer"}
+              <Play size={15} aria-hidden="true" />
+              {isTrailerMode ? "Back to Video" : "Watch Trailer"}
             </button>
           )}
-
-          {!isTrailerMode && (
+          {!isTrailerMode && sources.length > 1 && (
             <button
               type="button"
-              onClick={handleNextServer}
-              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md bg-indigo-600 px-5 py-2.5 font-medium text-white shadow-lg transition-all hover:bg-indigo-700 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-300 sm:flex-none"
+              onClick={nextSource}
+              className="inline-flex min-h-10 items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 font-semibold text-white hover:bg-indigo-700"
             >
               <RotateCcw size={16} aria-hidden="true" />
-              Next Server
+              Next Source
             </button>
           )}
         </div>
       </div>
-
-      <p className="text-xs text-zinc-500">
-        If playback is unavailable, choose another server. Video is delivered by the selected external provider.
-      </p>
-      {isTrailerMode && (
-        <p className="text-xs text-zinc-500">
-          Official trailer preview only — this is not the full movie or episode.
-        </p>
+      {sources.length > 1 && !isTrailerMode && (
+        <div className="w-full max-w-5xl">
+          <label htmlFor="pinflix-source" className="mb-1.5 block text-xs font-medium text-zinc-400">Select source</label>
+          <select
+            id="pinflix-source"
+            value={activeIndex}
+            onChange={(event) => {
+              lastError.current = null;
+              setFailedStream(null);
+              setSelection({ key: mediaKey, index: Number(event.target.value) });
+            }}
+            className="w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-sm text-white outline-none focus:border-indigo-500"
+          >
+            {sources.map((source, index) => (
+              <option key={`${source.url}:${index}`} value={index}>{source.label}</option>
+            ))}
+          </select>
+        </div>
       )}
+      <p className="w-full max-w-5xl text-xs leading-relaxed text-zinc-500">
+        Full-length playback uses owner-configured, authorized MP4/HLS sources without third-party ad iframe overlays. Source availability and video licensing are separate from TMDB.
+      </p>
     </section>
   );
 }
