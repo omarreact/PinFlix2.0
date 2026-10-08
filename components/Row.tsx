@@ -26,7 +26,6 @@ export default function Row({
   const [items, setItems] = useState<Title[] | null>(null);
   const [error, setError] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
-  const section = useRef<HTMLElement>(null);
   const drag = useRef({ down: false, x: 0, left: 0, moved: false });
 
   useEffect(() => {
@@ -37,24 +36,6 @@ export default function Row({
     return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);
-
-  useEffect(() => {
-    const el = section.current;
-    if (!el) return;
-
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          el.classList.add("is-visible");
-          io.disconnect();
-        }
-      },
-      { threshold: 0.08 },
-    );
-
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
 
   const scrollBy = (dir: 1 | -1) =>
     scroller.current?.scrollBy({
@@ -86,10 +67,10 @@ export default function Row({
     .slice(0, limit ?? 20);
 
   return (
-    <section ref={section} className="reveal group/row relative py-1 sm:py-2">
+    <section aria-label={title} className="group/row relative py-2 sm:py-3">
       <div className="mb-0 flex items-end justify-between gap-4 px-4 sm:px-8">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="h-5 w-1 shrink-0 rounded-full bg-accent shadow-[0_0_18px_rgba(117,242,60,0.22)]" />
+          <span className="h-5 w-1 shrink-0 bg-accent" />
           <h2 className="truncate font-display text-base font-semibold tracking-[-0.03em] text-white sm:text-lg">
             {title}
           </h2>
@@ -108,7 +89,7 @@ export default function Row({
 
       <div className="relative">
         <button
-          aria-label="Scroll left"
+          aria-label={`Scroll ${title} left`}
           onClick={() => scrollBy(-1)}
           className="glass absolute left-3 top-[38%] z-40 hidden h-10 w-10 items-center justify-center rounded-full text-white/80 opacity-0 transition group-hover/row:opacity-100 hover:border-accent/40 hover:bg-accent hover:text-[#071005] md:flex"
         >
@@ -117,6 +98,13 @@ export default function Row({
 
         <div
           ref={scroller}
+          role="region"
+          tabIndex={0}
+          aria-label={`${title} titles, scroll horizontally`}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowRight") { event.preventDefault(); scrollBy(1); }
+            if (event.key === "ArrowLeft") { event.preventDefault(); scrollBy(-1); }
+          }}
           onMouseDown={onDown}
           onMouseMove={onMove}
           onMouseUp={end}
@@ -146,7 +134,7 @@ export default function Row({
         </div>
 
         <button
-          aria-label="Scroll right"
+          aria-label={`Scroll ${title} right`}
           onClick={() => scrollBy(1)}
           className="glass absolute right-3 top-[38%] z-40 hidden h-10 w-10 items-center justify-center rounded-full text-white/80 opacity-0 transition group-hover/row:opacity-100 hover:border-accent/40 hover:bg-accent hover:text-[#071005] md:flex"
         >
