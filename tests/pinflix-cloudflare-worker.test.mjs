@@ -8,6 +8,7 @@ function bucket() {
   const objects = new Map([
     ["catalog/movie:123.json", JSON.stringify({sources:[{label:"Test MP4",path:"media/movie/123.mp4"}]})],
     ["media/movie/123.mp4", "FAKE_VIDEO_DATA"],
+    ["media/diagnostic/edge-health.mp4", "DUMMY_MP4_FIXTURE"],
     ["catalog/tv:456:s1e2.json", JSON.stringify({sources:[{label:"Episode HLS",path:"media/tv/456/s1e2/master.m3u8"}]})],
     ["media/tv/456/s1e2/master.m3u8", "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10,\nsegment.ts\n#EXT-X-ENDLIST"],
     ["media/tv/456/s1e2/segment.ts", "FAKE_SEGMENT_DATA"],
@@ -70,4 +71,16 @@ test("CORS denies unknown web origins, non-media routes return 404",async()=>{
   const r=await request("https://media.example.org/health",{headers:{Origin:"https://evil.example"}});
   assert.equal(r.headers.get("Access-Control-Allow-Origin"),null);
   assert.equal((await request("https://media.example.org/unlisted")).status,404);
+});
+
+test("diagnostic issues a real signed URL only for its own test asset", async()=>{
+  const info=await request("https://media.example.org/diagnostic");
+  assert.equal(info.status,200);
+  const data=await info.json();
+  assert.equal(data.kind,"mp4");
+  assert.equal(data.label,"PinFlix diagnostic test clip");
+  assert.match(data.playbackUrl,/^https:\/\/media\.example\.org\/m\/media\/diagnostic\/edge-health\.mp4\?exp=/);
+  const fetched=await request(data.playbackUrl);
+  assert.equal(fetched.status,200);
+  assert.equal(await fetched.text(),"DUMMY_MP4_FIXTURE");
 });
