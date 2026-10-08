@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, LayoutGrid, Rows3, RotateCcw, Search } from "lucide-react";
 import Footer, { CtaBanner } from "@/components/Footer";
 import MovieCard from "@/components/MovieCard";
 import Navbar from "@/components/Navbar";
@@ -20,16 +20,19 @@ const SORTS = [
 function Select({
   value,
   onChange,
+  label,
   children,
 }: {
   value: string;
   onChange: (v: string) => void;
+  label: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative rounded-lg border border-white/15 bg-black">
+    <div className="relative rounded-lg border border-white/15 bg-surface">
       <select
         value={value}
+        aria-label={label}
         onChange={(e) => onChange(e.target.value)}
         className="cursor-pointer appearance-none bg-transparent py-2 pl-3 pr-8 text-xs font-semibold outline-none [&>option]:bg-zinc-900"
       >
@@ -52,6 +55,7 @@ export default function BrowseView() {
   const [page, setPage] = useState(1);
   const [letter, setLetter] = useState("");
   const [filter, setFilter] = useState("");
+  const [viewMode, setViewMode] = useState<"poster" | "wide">("poster");
   const [data, setData] = useState<{
     key: string;
     items: Title[];
@@ -113,7 +117,7 @@ export default function BrowseView() {
     <>
       <Navbar />
       <main className="mx-auto w-full max-w-7xl px-4 pb-8 pt-24 sm:px-8">
-        <h1 className="font-display text-2xl font-bold uppercase sm:text-3xl">
+        <h1 className="font-display text-2xl font-medium sm:text-3xl">
           {type === "tv" ? "TV Shows" : "Movies"}
         </h1>
         <p className="mt-1 text-[11px] text-zinc-400">
@@ -123,14 +127,15 @@ export default function BrowseView() {
           / {type === "tv" ? "TV Shows" : "Movies"}
         </p>
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-[230px_1fr]">
-          <div className="space-y-8">
-            <div className="flex items-center gap-2 rounded-lg border border-white/15 bg-black px-3 py-2">
+        <div className="mt-8 grid gap-8 lg:grid-cols-[245px_1fr]">
+          <div className="h-fit space-y-7 rounded-xl border border-white/10 bg-surface p-4">
+            <div className="flex min-h-11 items-center gap-2 rounded-lg border border-white/15 bg-[#0b100e] px-3 py-2">
               <Search size={14} />
               <input
                 value={filter}
+                aria-label="Filter titles on this page"
                 onChange={(e) => setFilter(e.target.value)}
-                placeholder="Search…"
+                placeholder="Filter this page…"
                 className="w-full bg-transparent text-xs outline-none"
               />
             </div>
@@ -141,6 +146,8 @@ export default function BrowseView() {
                   <button
                     key={l}
                     onClick={() => setLetter(letter === l ? "" : l)}
+                    aria-label={`Filter by letter ${l}`}
+                    aria-pressed={letter === l}
                     className={`aspect-square rounded text-[11px] font-bold transition ${
                       letter === l
                         ? "bg-accent text-black"
@@ -152,7 +159,17 @@ export default function BrowseView() {
                 ))}
               </div>
             </div>
-            <div className="hidden lg:block">
+            <button
+              type="button"
+              onClick={() => {
+                setGenre(""); setYear(""); setSort(SORTS[0].v);
+                setPage(1); setLetter(""); setFilter("");
+              }}
+              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-sm text-white/80 transition hover:border-accent hover:text-accent"
+            >
+              <RotateCcw size={15} aria-hidden="true" /> Clear filters
+            </button>
+            <div className="hidden border-t border-white/10 pt-6 lg:block">
               <PopularList type={type} />
             </div>
           </div>
@@ -165,7 +182,7 @@ export default function BrowseView() {
                   : `Showing ${items.length} of ${data!.total.toLocaleString()} results`}
               </p>
               <div className="flex gap-2">
-                <Select value={genre} onChange={reset(setGenre)}>
+                <Select label="Genre" value={genre} onChange={reset(setGenre)}>
                   <option value="">Genres</option>
                   {GENRE_OPTIONS.map((g) => (
                     <option key={g.id} value={g.id}>
@@ -173,13 +190,13 @@ export default function BrowseView() {
                     </option>
                   ))}
                 </Select>
-                <Select value={year} onChange={reset(setYear)}>
+                <Select label="Release year" value={year} onChange={reset(setYear)}>
                   <option value="">Year</option>
                   {years.map((y) => (
                     <option key={y}>{y}</option>
                   ))}
                 </Select>
-                <Select value={sort} onChange={reset(setSort)}>
+                <Select label="Sort titles" value={sort} onChange={reset(setSort)}>
                   {SORTS.map((s) => (
                     <option key={s.v} value={s.v}>
                       Sort: {s.l}
@@ -189,16 +206,36 @@ export default function BrowseView() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 xl:grid-cols-4">
+            <div className="mb-4 flex justify-end gap-2" role="group" aria-label="Catalog layout">
+              <button
+                type="button"
+                onClick={() => setViewMode("poster")}
+                aria-pressed={viewMode === "poster"}
+                aria-label="Show poster layout"
+                className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 py-2 text-xs transition ${viewMode === "poster" ? "border-accent bg-accent/10 text-accent" : "border-white/20 bg-surface text-white/75 hover:text-white"}`}
+              >
+                <LayoutGrid size={16} aria-hidden="true" /> Posters
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("wide")}
+                aria-pressed={viewMode === "wide"}
+                aria-label="Show landscape layout"
+                className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 py-2 text-xs transition ${viewMode === "wide" ? "border-accent bg-accent/10 text-accent" : "border-white/20 bg-surface text-white/75 hover:text-white"}`}
+              >
+                <Rows3 size={16} aria-hidden="true" /> Landscape
+              </button>
+            </div>
+            <div className={`grid grid-cols-2 gap-x-4 gap-y-6 ${viewMode === "poster" ? "sm:grid-cols-3 xl:grid-cols-5" : "sm:grid-cols-3 xl:grid-cols-4"}`}>
               {loading
                 ? Array.from({ length: 12 }).map((_, i) => (
                     <div key={i}>
-                      <div className="aspect-video animate-pulse rounded-lg bg-zinc-800" />
+                      <div className={`${viewMode === "poster" ? "aspect-[2/3]" : "aspect-video"} animate-pulse rounded-xl bg-surface` />
                       <div className="mt-3 h-3 w-2/3 animate-pulse rounded bg-zinc-800" />
                     </div>
                   ))
                 : items.map((t) => (
-                    <MovieCard key={t.id} item={t} type={type} variant="wide" fluid />
+                    <MovieCard key={t.id} item={t} type={type} variant={viewMode} fluid />
                   ))}
             </div>
             {!loading && items.length === 0 && (
@@ -211,6 +248,7 @@ export default function BrowseView() {
               {page > 1 && (
                 <button
                   onClick={() => setPage(page - 1)}
+                  aria-label="Previous page"
                   className="rounded bg-zinc-900 px-3 py-2 hover:bg-zinc-800"
                 >
                   ‹
@@ -220,6 +258,8 @@ export default function BrowseView() {
                 <button
                   key={p}
                   onClick={() => setPage(p)}
+                  aria-current={p === page ? "page" : undefined}
+                  aria-label={`Page ${p}`}
                   className={`rounded px-3 py-2 ${
                     p === page
                       ? "bg-accent text-black"
@@ -232,6 +272,7 @@ export default function BrowseView() {
               {page < pages && (
                 <button
                   onClick={() => setPage(page + 1)}
+                  aria-label="Next page"
                   className="rounded bg-zinc-900 px-3 py-2 hover:bg-zinc-800"
                 >
                   »
