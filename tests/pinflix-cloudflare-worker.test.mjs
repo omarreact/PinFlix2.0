@@ -9,6 +9,10 @@ function bucket() {
     ["catalog/movie:123.json", JSON.stringify({sources:[{label:"Test MP4",path:"media/movie/123.mp4"}]})],
     ["media/movie/123.mp4", "FAKE_VIDEO_DATA"],
     ["media/diagnostic/edge-health.mp4", "DUMMY_MP4_FIXTURE"],
+    ["media/diagnostic/edge-index.m3u8", "#EXTM3U\n#EXTINF:1.0,\nedge-segment000.ts\n#EXT-X-ENDLIST"],
+    ["media/diagnostic/edge-segment000.ts", "FAKE_DIAGNOSTIC_TS"],
+    ["catalog-public/movie:123.json", JSON.stringify({public:true,sources:[{label:"Free public MP4",path:"media/movie/123.mp4"}]})],
+    ["catalog-public/movie:456.json", JSON.stringify({public:false,sources:[{label:"Unpublished",path:"media/movie/123.mp4"}]})],
     ["catalog/tv:456:s1e2.json", JSON.stringify({sources:[{label:"Episode HLS",path:"media/tv/456/s1e2/master.m3u8"}]})],
     ["media/tv/456/s1e2/master.m3u8", "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10,\nsegment.ts\n#EXT-X-ENDLIST"],
     ["media/tv/456/s1e2/segment.ts", "FAKE_SEGMENT_DATA"],
@@ -83,4 +87,28 @@ test("diagnostic issues a real signed URL only for its own test asset", async()=
   const fetched=await request(data.playbackUrl);
   assert.equal(fetched.status,200);
   assert.equal(await fetched.text(),"DUMMY_MP4_FIXTURE");
+});
+
+test("opt-in public catalog works without bearer while unpublished entries stay closed", async()=>{
+  const published=await request("https://media.example.org/public-resolve?key=movie%3A123");
+  assert.equal(published.status,200);
+  const publishedData=await published.json();
+  assert.equal(publishedData.sources.length,1);
+  assert.match(publishedData.sources[0].url,/^https:\/\/media\.example\.org\/m\//);
+  const denied=await request("https://media.example.org/public-resolve?key=movie%3A456");
+  assert.deepEqual((await denied.json()).sources,[]);
+  const absent=await request("https://media.example.org/public-resolve?key=movie%3A111");
+  assert.deepEqual((await absent.json()).sources,[]);
+  assert.equal((await request("https://media.example.org/resolve?key=movie%3A123")).status,401);
+});
+test("diagnostic HLS playlist and segment are signed",async()=>{
+  const data=await(await request("https://media.example.org/diagnostic")).json();
+  assert.match(data.hlsPlaybackUrl,/^https:\/\/media\.example\.org\/m\/media\/diagnostic\/edge-index\.m3u8/);
+  const playlist=await request(data.hlsPlaybackUrl);
+  assert.equal(playlist.status,200);
+  const text=await playlist.text();
+  const segmentUrl=text.split("\n").find(x=>x.startsWith("https://"));
+  assert.match(segmentUrl,/edge-segment000\.ts\?exp=\d+&sig=[0-9a-f]{64}/);
+  const segment=await request(segmentUrl);
+  assert.equal(await segment.text(),"FAKE_DIAGNOSTIC_TS");
 });
