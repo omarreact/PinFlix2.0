@@ -36,6 +36,8 @@ export default function Navbar() {
   const [menu, setMenu] = useState(false);
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Title[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(false);
   const [focus, setFocus] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -56,23 +58,28 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    if (q.trim().length < 2) {
-      // Results are hidden by "shown" below until the query is valid.
-      return;
-    }
+    if (q.trim().length < 2) return;
 
     const ac = new AbortController();
     const t = setTimeout(() => {
+      setSearching(true);
+      setSearchError(false);
       tmdb<{ results: Title[] }>("/search/multi", { query: q }, ac.signal)
-        .then((d) =>
+        .then((d) => {
           setResults(
             d.results
               .filter((r) => r.media_type === "movie" || r.media_type === "tv")
               .slice(0, 6),
-          ),
-        )
-        .catch(() => {});
-    }, 300);
+          );
+          setSearching(false);
+        })
+        .catch((err) => {
+          if (err.name !== "AbortError") {
+            setSearchError(true);
+            setSearching(false);
+          }
+        });
+    }, 280);
 
     return () => {
       clearTimeout(t);
@@ -88,7 +95,8 @@ export default function Navbar() {
     return () => window.removeEventListener("keydown", onEscape);
   }, []);
 
-  const shown = q.trim().length < 2 ? [] : results;
+  const isQueryActive = q.trim().length >= 2;
+  const shown = isQueryActive ? results : [];
   const go = (t: Title) => {
     setFocus(false);
     setQ("");
@@ -143,36 +151,52 @@ export default function Navbar() {
               />
             </div>
 
-            {focus && shown.length > 0 && (
-              <ul className="glass absolute right-0 top-12 w-80 overflow-hidden rounded-2xl p-1">
-                {shown.map((r) => (
-                  <li key={`${r.media_type}${r.id}`}>
-                    <button
-                      onClick={() => go(r)}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-white/[0.07]"
-                    >
-                      <div className="h-14 w-10 shrink-0 overflow-hidden rounded-md bg-zinc-800">
-                        {r.poster_path && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={img(r.poster_path, "w92")!}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-bold text-white">
-                          {titleOf(r)}
-                        </p>
-                        <p className="mt-0.5 text-[11px] font-medium text-white/45">
-                          {r.media_type === "tv" ? "TV Series" : "Movie"} · {yearOf(r)}
-                        </p>
-                      </div>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+            {focus && q.trim().length >= 2 && (
+              <div className="glass absolute right-0 top-12 w-80 overflow-hidden rounded-2xl p-1 shadow-2xl">
+                {searching ? (
+                  <div className="p-4 text-center text-xs text-zinc-400">
+                    Searching titles…
+                  </div>
+                ) : searchError ? (
+                  <div className="p-4 text-center text-xs text-amber-400">
+                    Search service unavailable.
+                  </div>
+                ) : shown.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-zinc-400">
+                    No results for &ldquo;{q}&rdquo;
+                  </div>
+                ) : (
+                  <ul>
+                    {shown.map((r) => (
+                      <li key={`${r.media_type}${r.id}`}>
+                        <button
+                          onClick={() => go(r)}
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-white/[0.07]"
+                        >
+                          <div className="h-14 w-10 shrink-0 overflow-hidden rounded-md bg-zinc-800">
+                            {r.poster_path && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={img(r.poster_path, "w92")!}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold text-white">
+                              {titleOf(r)}
+                            </p>
+                            <p className="mt-0.5 text-[11px] font-medium text-white/45">
+                              {r.media_type === "tv" ? "TV Series" : "Movie"} · {yearOf(r)}
+                            </p>
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
 

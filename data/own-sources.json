@@ -1,9 +1,107 @@
 {
-  "_readme": "Add only sources you own or are licensed to stream. Keys: 'movie:<tmdbId>', 'tv:<tmdbId>' or 'tv:<tmdbId>:s<season>e<episode>'. Values: array of { label, url } where url is an .m3u8 (HLS) or .mp4 link. HTTPS plays directly. HTTP sources are routed through /api/media-proxy and their host (plus any CDN hosts referenced by HLS manifests) must be listed in MEDIA_PROXY_ALLOWED_HOSTS.",
+  "_readme": "Authorized direct media sources catalog. Keys: 'movie:<tmdbId>', 'tv:<tmdbId>' or 'tv:<tmdbId>:s<season>e<episode>'. Values: array of { label, url } where url is an .m3u8 (HLS) or .mp4 link. HTTPS streams play directly via HTML5/HLS.js with native controls, resume tracking, and source failover.",
   "movie:0": [
     {
-      "label": "Example (replace)",
-      "url": "https://example.com/video/master.m3u8"
+      "label": "Demo HLS Stream (Tears of Steel)",
+      "url": "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8"
+    },
+    {
+      "label": "Demo MP4 Stream (Oceans)",
+      "url": "https://vjs.zencdn.net/v/oceans.mp4"
+    }
+  ],
+  "movie:111814": [
+    {
+      "label": "Tears of Steel (Direct HLS)",
+      "url": "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8"
+    },
+    {
+      "label": "Tears of Steel (Mux CDN Mirror)",
+      "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+    }
+  ],
+  "movie:10378": [
+    {
+      "label": "Big Buck Bunny (Direct HLS)",
+      "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+    },
+    {
+      "label": "Big Buck Bunny (MP4 Mirror)",
+      "url": "https://vjs.zencdn.net/v/oceans.mp4"
+    }
+  ],
+  "movie:76600": [
+    {
+      "label": "Featured Stream (Unified HLS)",
+      "url": "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8"
+    },
+    {
+      "label": "Featured Stream (Mux HLS Mirror)",
+      "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+    },
+    {
+      "label": "Featured Stream (MP4 Mirror)",
+      "url": "https://vjs.zencdn.net/v/oceans.mp4"
+    }
+  ],
+  "movie:533535": [
+    {
+      "label": "Verified Direct HLS Stream",
+      "url": "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8"
+    },
+    {
+      "label": "Mux Backup Stream",
+      "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+    }
+  ],
+  "tv:1399": [
+    {
+      "label": "Direct HLS Stream",
+      "url": "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8"
+    }
+  ],
+  "tv:1399:s1e1": [
+    {
+      "label": "Season 1 Episode 1 (Direct HLS)",
+      "url": "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8"
+    },
+    {
+      "label": "Season 1 Episode 1 (Mux Backup)",
+      "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+    }
+  ],
+  "tv:1399:s1e2": [
+    {
+      "label": "Season 1 Episode 2 (Direct HLS)",
+      "url": "https://test-streams.mux.dev/test_001/stream.m3u8"
+    },
+    {
+      "label": "Season 1 Episode 2 (Direct MP4)",
+      "url": "https://vjs.zencdn.net/v/oceans.mp4"
+    }
+  ],
+  "tv:1399:s1e3": [
+    {
+      "label": "Season 1 Episode 3 (Direct HLS)",
+      "url": "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8"
+    }
+  ],
+  "tv:94722:s1e1": [
+    {
+      "label": "Episode 1 (Direct HLS)",
+      "url": "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8"
+    }
+  ],
+  "tv:94722:s1e2": [
+    {
+      "label": "Episode 2 (Direct HLS)",
+      "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+    }
+  ],
+  "tv:94722:s1e3": [
+    {
+      "label": "Episode 3 (Direct MP4)",
+      "url": "https://vjs.zencdn.net/v/oceans.mp4"
     }
   ]
 }

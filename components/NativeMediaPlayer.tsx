@@ -15,6 +15,7 @@ interface NativeMediaPlayerProps {
   season?: number;
   episode?: number;
   onFatalError: () => void;
+  onEnded?: () => void;
 }
 
 function playbackUrl(source: PlayableSource): string {
@@ -31,16 +32,19 @@ export default function NativeMediaPlayer({
   season,
   episode,
   onFatalError,
+  onEnded,
 }: NativeMediaPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const errorCallback = useRef(onFatalError);
+  const endedCallback = useRef(onEnded);
   const itemRef = useRef({ item, season, episode });
   const lastProgressWrite = useRef(0);
 
   useEffect(() => {
     errorCallback.current = onFatalError;
+    endedCallback.current = onEnded;
     itemRef.current = { item, season, episode };
-  }, [onFatalError, item, season, episode]);
+  }, [onFatalError, onEnded, item, season, episode]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -85,14 +89,17 @@ export default function NativeMediaPlayer({
       video.removeAttribute("src");
       video.load();
     };
-  }, [source.kind, source.url]);
+  }, [source]);
 
   const savePosition = (completed = false) => {
     const video = videoRef.current;
     if (!video || !Number.isFinite(video.duration) || video.duration <= 0) return;
     const { item: media, season: s, episode: e } = itemRef.current;
-    saveProgress(media, video.currentTime, video.duration, s, e, completed);
-    lastProgressWrite.current = video.currentTime;
+    // Only record genuine watch progress if the video has actually played
+    if (video.currentTime > 1 || completed) {
+      saveProgress(media, video.currentTime, video.duration, s, e, completed);
+      lastProgressWrite.current = video.currentTime;
+    }
   };
 
   const poster = item.posterPath?.startsWith("/")
@@ -113,8 +120,14 @@ export default function NativeMediaPlayer({
         const video = videoRef.current;
         if (!video || !Number.isFinite(video.duration) || video.duration <= 0) return;
         const saved = getProgress(item, season, episode);
-        if (saved && !saved.completed && saved.seconds > 10 &&
-          saved.seconds < video.duration - 30) video.currentTime = saved.seconds;
+        if (
+          saved &&
+          !saved.completed &&
+          saved.seconds > 10 &&
+          saved.seconds < video.duration - 30
+        ) {
+          video.currentTime = saved.seconds;
+        }
       }}
       onTimeUpdate={() => {
         const video = videoRef.current;
@@ -123,7 +136,10 @@ export default function NativeMediaPlayer({
         }
       }}
       onPause={() => savePosition()}
-      onEnded={() => savePosition(true)}
+      onEnded={() => {
+        savePosition(true);
+        endedCallback.current?.();
+      }}
       onError={() => errorCallback.current()}
     >
       <track kind="captions" />

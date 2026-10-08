@@ -56,14 +56,16 @@ export default function BrowseView() {
   const [letter, setLetter] = useState("");
   const [filter, setFilter] = useState("");
   const [viewMode, setViewMode] = useState<"poster" | "wide">("poster");
+  const [retryCount, setRetryCount] = useState(0);
   const [data, setData] = useState<{
     key: string;
     items: Title[];
     total: number;
     pages: number;
+    error?: boolean;
   } | null>(null);
 
-  const key = `${type}|${genre}|${year}|${sort}|${page}`;
+  const key = `${type}|${genre}|${year}|${sort}|${page}|${retryCount}`;
 
   useEffect(() => {
     const ac = new AbortController();
@@ -90,14 +92,26 @@ export default function BrowseView() {
           items: d.results,
           total: d.total_results,
           pages: Math.min(d.total_pages, 500),
+          error: false,
         }),
       )
-      .catch(() => {});
+      .catch((e) => {
+        if (e.name !== "AbortError") {
+          setData({
+            key,
+            items: [],
+            total: 0,
+            pages: 1,
+            error: true,
+          });
+        }
+      });
     return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
   const loading = data?.key !== key;
+  const hasError = !loading && Boolean(data?.error);
   const items = (data?.items ?? []).filter((t) => {
     const n = titleOf(t).toLowerCase();
     return (
@@ -226,19 +240,38 @@ export default function BrowseView() {
                 <Rows3 size={16} aria-hidden="true" /> Landscape
               </button>
             </div>
-            <div className={`grid grid-cols-2 gap-x-4 gap-y-6 ${viewMode === "poster" ? "sm:grid-cols-3 xl:grid-cols-5" : "sm:grid-cols-3 xl:grid-cols-4"}`}>
-              {loading
-                ? Array.from({ length: 12 }).map((_, i) => (
-                    <div key={i}>
-                      <div className={`${viewMode === "poster" ? "aspect-[2/3]" : "aspect-video"} animate-pulse rounded-xl bg-surface`} />
-                      <div className="mt-3 h-3 w-2/3 animate-pulse rounded bg-zinc-800" />
-                    </div>
-                  ))
-                : items.map((t) => (
-                    <MovieCard key={t.id} item={t} type={type} variant={viewMode} fluid />
-                  ))}
-            </div>
-            {!loading && items.length === 0 && (
+            {hasError ? (
+              <div className="my-12 flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-surface/50 p-10 text-center">
+                <RotateCcw size={32} className="text-accent mb-3" />
+                <h3 className="text-base font-bold text-white mb-1">
+                  Unable to load titles
+                </h3>
+                <p className="text-xs text-zinc-400 max-w-sm mb-5">
+                  Failed to connect to the discovery service. Please check your network and try again.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setRetryCount((c) => c + 1)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-xs font-bold text-black transition hover:bg-accent-soft"
+                >
+                  <RotateCcw size={14} /> Retry loading
+                </button>
+              </div>
+            ) : (
+              <div className={`grid grid-cols-2 gap-x-4 gap-y-6 ${viewMode === "poster" ? "sm:grid-cols-3 xl:grid-cols-5" : "sm:grid-cols-3 xl:grid-cols-4"}`}>
+                {loading
+                  ? Array.from({ length: 12 }).map((_, i) => (
+                      <div key={i}>
+                        <div className={`${viewMode === "poster" ? "aspect-[2/3]" : "aspect-video"} animate-pulse rounded-xl bg-surface`} />
+                        <div className="mt-3 h-3 w-2/3 animate-pulse rounded bg-zinc-800" />
+                      </div>
+                    ))
+                  : items.map((t) => (
+                      <MovieCard key={t.id} item={t} type={type} variant={viewMode} fluid />
+                    ))}
+              </div>
+            )}
+            {!loading && !hasError && items.length === 0 && (
               <p className="py-16 text-center text-sm text-zinc-500">
                 Nothing matches these filters on this page.
               </p>

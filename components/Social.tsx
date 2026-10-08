@@ -94,7 +94,6 @@ export function Reviews({ storageId, title }: { storageId: string; title: string
   const [rating, setRating] = useState(0);
   const [text, setText] = useState("");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,7 +113,7 @@ export function Reviews({ storageId, title }: { storageId: string; title: string
         Be The First To Review “{title}”
       </h3>
       <p className="mb-4 text-[11px] text-zinc-500">
-        Your email address will not be published. Required fields are marked *
+        Reviews are stored locally in your browser. Required fields are marked *
       </p>
       <form onSubmit={submit} className="space-y-4">
         <div>
@@ -147,26 +146,14 @@ export function Reviews({ storageId, title }: { storageId: string; title: string
             className={field}
           />
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-[11px] text-zinc-400">Name *</label>
-            <input
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={field}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-[11px] text-zinc-400">Email *</label>
-            <input
-              required
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={field}
-            />
-          </div>
+        <div>
+          <label className="mb-1 block text-[11px] text-zinc-400">Name *</label>
+          <input
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className={field}
+          />
         </div>
         <button
           type="submit"
