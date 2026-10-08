@@ -1,144 +1,75 @@
 @import "tailwindcss";
 
 :root {
-  --background: #070807;
-  --foreground: #f7f8f5;
-  --surface: #101210;
-  --surface-elevated: #171a17;
-  --muted: #9ba09a;
-  --accent: #75f23c;
-  --accent-soft: #b6ff91;
-  --line: rgba(255, 255, 255, 0.1);
+  color-scheme: dark;
+  --background: #0b100e;
+  --foreground: #f1f6f2;
+  --surface: #141d18;
+  --surface-elevated: #1c2820;
+  --surface-0: var(--background);
+  --surface-1: var(--surface);
+  --surface-2: var(--surface-elevated);
+  --text-primary: var(--foreground);
+  --text-secondary: #c5d2c8;
+  --text-muted: #9caea1;
+  --muted: var(--text-muted);
+  --accent: #9ce1b9;
+  --accent-soft: #c1eed3;
+  --line: #34443a;
+  --border: var(--line);
+  --radius: 12px;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-accent: var(--accent);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
   --font-sans: var(--font-manrope), system-ui, sans-serif;
   --font-display: var(--font-sora), var(--font-manrope), sans-serif;
 }
 
-* {
-  box-sizing: border-box;
-}
-
-html {
-  background: var(--background);
-  scroll-behavior: smooth;
-}
-
+* { box-sizing: border-box; }
+html { background: var(--background); scroll-behavior: smooth; }
 body {
   min-width: 320px;
-  background:
-    radial-gradient(circle at 12% 0%, rgba(117, 242, 60, 0.07), transparent 28rem),
-    linear-gradient(180deg, #070807 0%, #090a09 46%, #070807 100%);
+  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-manrope), system-ui, sans-serif;
   font-feature-settings: "kern" 1, "liga" 1;
   text-rendering: optimizeLegibility;
 }
+button, input, select, textarea { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled), select { cursor: pointer; }
+::selection { background: var(--accent); color: var(--background); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-
-button,
-a {
-  -webkit-tap-highlight-color: transparent;
-}
-
-::selection {
-  background: var(--accent);
-  color: #071005;
-}
-
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 
 @keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(18px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.animate-fade-up { animation: fade-up .3s ease-out both; }
+.animate-fade-in { animation: fade-in .25s ease-out both; }
+.animate-fade-up:has([data-theater-mode="true"]) { animation: none; transform: none; }
 
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+/* Rows remain visible regardless of animation and intersection timing. */
+.reveal { opacity: 1; transform: none; }
 
-.animate-fade-up {
-  animation: fade-up 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-/* The entrance animation has transform fill-mode, which would otherwise
-   trap position:fixed theater mode inside the animated grid. */
-.animate-fade-up:has([data-theater-mode="true"]) {
-  animation: none;
-  transform: none;
-}
-
-.animate-fade-in {
-  animation: fade-in 0.55s ease-out both;
-}
-
-.reveal {
-  opacity: 0;
-  transform: translateY(16px);
-  transition:
-    opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.reveal.is-visible {
-  opacity: 1;
-  transform: none;
-}
-
-.glass {
-  background: rgba(14, 16, 14, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
-}
-
-.outline-num {
-  color: transparent;
-  -webkit-text-stroke: 2px rgba(117, 242, 60, 0.78);
-  text-shadow: 0 0 32px rgba(117, 242, 60, 0.08);
-}
+.glass { background: var(--surface); border: 1px solid var(--line); }
+.outline-num { color: transparent; -webkit-text-stroke: 1px var(--accent); }
 
 @media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
-
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: .01ms !important;
   }
 }
