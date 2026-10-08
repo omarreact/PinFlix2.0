@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getNextEpisode } from "../lib/episode-navigation.ts";
+import { getNextEpisode, getPreviousEpisode } from "../lib/episode-navigation.ts";
 
 test("advances within a season", () => {
   assert.deepEqual(
@@ -46,4 +46,14 @@ test("does not mutate TMDB season ordering", () => {
   ];
   assert.deepEqual(getNextEpisode(1, 10, seasons), { season: 2, episode: 1 });
   assert.deepEqual(seasons.map((season) => season.season_number), [2, 1]);
+});
+
+test("goes back within a season and across season boundaries", () => {
+  const seasons = [
+    { season_number: 1, episode_count: 8 },
+    { season_number: 2, episode_count: 6 },
+  ];
+  assert.deepEqual(getPreviousEpisode(1, 4, seasons), { season: 1, episode: 3 });
+  assert.deepEqual(getPreviousEpisode(2, 1, seasons), { season: 1, episode: 8 });
+  assert.equal(getPreviousEpisode(1, 1, seasons), null);
 });

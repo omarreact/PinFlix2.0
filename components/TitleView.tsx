@@ -199,6 +199,8 @@ export default function TitleView({
                   episode={type === "tv" ? episode : undefined}
                   videos={d.videos?.results ?? []}
                   posterPath={d.poster_path}
+                  seasons={seasons}
+                  onEpisodeChange={(s, e) => updateSelection(s, e, true)}
                 />
               ) : (
                 <button

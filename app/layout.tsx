@@ -16,7 +16,11 @@ const sora = Sora({
 
 export const metadata: Metadata = {
   title: "PINFLIX 2.0",
-  description: "Discover movies and TV shows.",
+  description: "Discover and stream full-length movies and TV shows with multiple high-definition servers.",
+  openGraph: {
+    title: "PINFLIX 2.0",
+    description: "Discover and stream full-length movies and TV shows with multiple high-definition servers.",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

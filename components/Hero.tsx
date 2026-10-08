@@ -37,17 +37,17 @@ export default function Hero() {
 
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <Link
-                href="/browse/movie"
-                className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-3 text-sm font-medium text-[#0b100e] transition hover:bg-accent-soft"
+                href="/title/movie/76600?play=1"
+                className="inline-flex items-center gap-2 rounded-full bg-accent px-6 py-3 text-sm font-bold text-[#0b100e] shadow-lg shadow-accent/20 transition hover:bg-accent-soft"
               >
-                <Play size={15} className="fill-current" />
-                Browse movies
+                <Play size={16} className="fill-current" />
+                Watch Movie Now
               </Link>
               <Link
-                href="/browse/tv"
+                href="/browse/movie"
                 className="inline-flex items-center gap-2 rounded-lg border border-white/25 bg-white/10 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/20"
               >
-                Explore TV shows
+                Browse movies
                 <ArrowRight size={15} />
               </Link>
             </div>

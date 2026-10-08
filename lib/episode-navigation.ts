@@ -54,3 +54,46 @@ export function getNextEpisode(
 
   return following ? { season: following.season_number, episode: 1 } : null;
 }
+
+export function getPreviousEpisode(
+  currentSeason: number,
+  currentEpisode: number,
+  seasons: readonly SeasonSummary[],
+): EpisodeSelection | null {
+  if (
+    !Number.isSafeInteger(currentSeason) ||
+    currentSeason < 1 ||
+    !Number.isSafeInteger(currentEpisode) ||
+    currentEpisode < 1
+  ) {
+    return null;
+  }
+
+  const available = seasons
+    .filter(
+      (entry) =>
+        Number.isSafeInteger(entry.season_number) &&
+        entry.season_number > 0 &&
+        Number.isSafeInteger(entry.episode_count) &&
+        entry.episode_count > 0,
+    )
+    .sort((a, b) => a.season_number - b.season_number);
+
+  const current = available.find(
+    (entry) => entry.season_number === currentSeason,
+  );
+
+  if (!current) return null;
+
+  if (currentEpisode > 1) {
+    return { season: currentSeason, episode: currentEpisode - 1 };
+  }
+
+  const preceding = [...available]
+    .reverse()
+    .find((entry) => entry.season_number < currentSeason);
+
+  return preceding
+    ? { season: preceding.season_number, episode: preceding.episode_count }
+    : null;
+}

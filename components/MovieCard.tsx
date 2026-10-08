@@ -53,8 +53,8 @@ export default function MovieCard({
 
   const card = (
     <Link
-      href={`/title/${t}/${item.id}`}
-      aria-label={`View details for ${titleOf(item)}`}
+      href={`/title/${t}/${item.id}?play=1`}
+      aria-label={`Watch ${titleOf(item)}`}
       className={`group relative z-0 block ${width} shrink-0 transition-colors hover:z-30`}
       draggable={false}
     >

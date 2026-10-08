@@ -1,0 +1,6 @@
+{
+  "name": "PINFLIX 2.0",
+  "description": "Discover and stream full-length movies and TV shows with multiple high-definition servers.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
