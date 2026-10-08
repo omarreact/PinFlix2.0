@@ -27,7 +27,7 @@ function parseAllowedUrl(value: string) {
   // configured. DNS-rebinding prevention also requires an egress policy upstream.
   if (host === "localhost" || host.endsWith(".localhost") ||
       host.endsWith(".local") || host.endsWith(".internal") ||
-      /^\\d+(?:\\.\\d+){3}$/.test(host) || host.includes(":")) {
+      /^\d+(?:\.\d+){3}$/.test(host) || host.includes(":")) {
     throw new Error("Non-public media hostname");
   }
   if (!allowedHosts().has(host)) {
