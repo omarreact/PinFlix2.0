@@ -6,6 +6,8 @@ const ALLOWED = [
   /^\/(movie|tv)\/(popular|top_rated|now_playing|on_the_air)$/,
   /^\/(movie|tv)\/\d+$/,
   /^\/(movie|tv)\/\d+\/recommendations$/,
+  /^\/(movie|tv)\/\d+\/watch\/providers$/,
+  /^\/(movie|tv)\/\d+\/external_ids$/,
   /^\/tv\/\d+\/season\/\d+$/,
   /^\/search\/multi$/,
   /^\/discover\/(movie|tv)$/,
