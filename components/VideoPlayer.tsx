@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { RotateCcw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Expand, Play, RotateCcw, Shrink } from "lucide-react";
 import type { Video } from "@/lib/tmdb";
 
 interface VideoPlayerProps {
@@ -79,8 +79,29 @@ export default function VideoPlayer({
   // without setting state in an effect (or flashing the previous embed).
   const [selection, setSelection] = useState({ mediaKey: "", index: 0 });
   const [trailerModeKey, setTrailerModeKey] = useState<string | null>(null);
+  const [shieldRemovedFor, setShieldRemovedFor] = useState<string | null>(null);
+  const [isTheaterMode, setIsTheaterMode] = useState(false);
   const serverIndex = selection.mediaKey === mediaKey ? selection.index : 0;
   const activeServer = PROVIDERS[serverIndex];
+  const streamKey = `${mediaKey}:${serverIndex}`;
+  const isShieldActive = shieldRemovedFor !== streamKey;
+
+  useEffect(() => {
+    if (!isTheaterMode) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const exitOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsTheaterMode(false);
+    };
+    window.addEventListener("keydown", exitOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", exitOnEscape);
+    };
+  }, [isTheaterMode]);
 
   // Support the new explicit trailerKey prop AND the existing TMDB videos prop.
   const tmdbTrailer = videos
@@ -103,6 +124,7 @@ export default function VideoPlayer({
   };
 
   const toggleTrailer = () => {
+    setShieldRemovedFor(null);
     setTrailerModeKey(isTrailerMode ? null : mediaKey);
   };
 
@@ -115,8 +137,14 @@ export default function VideoPlayer({
   }
 
   return (
-    <section aria-label="PinFlix video player" className="flex w-full flex-col gap-3">
-      <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black shadow-2xl ring-1 ring-white/10">
+    <section
+      aria-label="PinFlix video player"
+      data-theater-mode={isTheaterMode}
+      className={isTheaterMode
+        ? "fixed inset-0 z-[80] flex w-screen flex-col items-center gap-3 overflow-y-auto bg-black/95 px-3 py-8 backdrop-blur-sm sm:px-8"
+        : "flex w-full flex-col gap-3"}
+    >
+      <div className="relative aspect-video w-full max-w-5xl shrink-0 overflow-hidden rounded-xl bg-black shadow-2xl ring-1 ring-white/10">
         {isTrailerMode && resolvedTrailerKey ? (
           <iframe
             key={`trailer:${mediaKey}:${resolvedTrailerKey}`}
@@ -140,9 +168,28 @@ export default function VideoPlayer({
             referrerPolicy="strict-origin-when-cross-origin"
           />
         )}
+        {!isTrailerMode && isShieldActive && (
+          <button
+            type="button"
+            aria-label="Activate the video player"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setShieldRemovedFor(streamKey);
+            }}
+            className="absolute inset-0 z-20 flex h-full w-full cursor-pointer flex-col items-center justify-center gap-3 bg-black/45 p-4 text-white transition-colors hover:bg-black/55 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
+          >
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-indigo-600 shadow-xl shadow-indigo-950/60 sm:h-20 sm:w-20">
+              <Play size={32} fill="currentColor" aria-hidden="true" />
+            </span>
+            <span className="rounded-lg border border-white/15 bg-zinc-950/80 px-4 py-2 text-center text-xs font-semibold sm:text-sm">
+              Click to open player controls
+            </span>
+          </button>
+        )}
       </div>
 
-      <div className="flex flex-col items-center justify-between gap-4 rounded-lg border border-gray-800 bg-[#111111] p-4 text-sm sm:flex-row">
+      <div className="flex w-full max-w-5xl flex-col items-center justify-between gap-4 rounded-lg border border-gray-800 bg-[#111111] p-4 text-sm sm:flex-row">
         <div aria-live="polite" className="min-w-0 text-center text-gray-400 sm:text-left">
           {isTrailerMode ? (
             <p className="font-semibold text-white">
@@ -161,6 +208,15 @@ export default function VideoPlayer({
         </div>
 
         <div className="flex w-full flex-wrap justify-center gap-3 sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setIsTheaterMode((value) => !value)}
+            aria-pressed={isTheaterMode}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-white/15 bg-zinc-800 px-4 py-2.5 font-medium text-white transition-colors hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          >
+            {isTheaterMode ? <Shrink size={16} aria-hidden="true" /> : <Expand size={16} aria-hidden="true" />}
+            {isTheaterMode ? "Exit Theater" : "Theater Mode"}
+          </button>
           {resolvedTrailerKey && (
             <button
               type="button"
