@@ -185,6 +185,8 @@ export default {
       if (!env.SIGNING_KEY || !env.MEDIA) return reply(request, env, { error: "Not configured" }, 503);
       const key = "media/diagnostic/edge-health.mp4";
       const asset = await env.MEDIA.head(key);
+      const hlsKey = "media/diagnostic/edge-index.m3u8";
+      const hlsAsset = await env.MEDIA.head(hlsKey);
       if (!asset) return reply(request, env, { error: "Diagnostic asset unavailable" }, 503);
       const exp = Math.floor(Date.now() / 1000) + 300;
       return reply(request, env, {
@@ -192,6 +194,7 @@ export default {
         durationHintSeconds: 1,
         kind: "mp4", bytes: asset.size,
         playbackUrl: await signedUrl(env, url.origin, key, exp),
+        hlsPlaybackUrl: hlsAsset ? await signedUrl(env, url.origin, hlsKey, exp) : null,
       });
     }
     if (url.pathname === "/resolve" && request.method === "GET") return catalogResponse(request, env, url);
