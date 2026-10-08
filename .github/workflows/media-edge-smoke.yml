@@ -50,3 +50,28 @@ jobs:
           test "$code" = 206
           grep -iq '^content-range: bytes 0-99/' /tmp/range-headers.txt
           test "$(wc -c </tmp/range-body.bin)" -eq 100
+
+      - name: Validate signed HLS manifest and media segment
+        run: |
+          set -euo pipefail
+          node -e 'const d=require("/tmp/edge-diagnostic.json"); if(typeof d.hlsPlaybackUrl!=="string"||!d.hlsPlaybackUrl.startsWith("https://media.pincodeit.com/m/media/diagnostic/edge-index.m3u8?"))process.exit(1);process.stdout.write(d.hlsPlaybackUrl)' > /tmp/signed-hls.txt
+          curl --fail --show-error --silent --retry 3 --retry-delay 3 \
+            "$(cat /tmp/signed-hls.txt)" -o /tmp/manifest.m3u8
+          node -e 'const fs=require("node:fs");const s=fs.readFileSync("/tmp/manifest.m3u8","utf8");const line=s.split("\n").find(x=>x.startsWith("https://"));if(!s.startsWith("#EXTM3U")||!line||!line.startsWith("https://media.pincodeit.com/m/media/diagnostic/edge-segment000.ts?exp=")||!line.includes("&sig="))process.exit(1);fs.writeFileSync("/tmp/hls-segment-url.txt",line);console.log("Signed HLS playlist OK")'
+          curl --fail --show-error --silent --retry 3 --retry-delay 3 \
+            "$(cat /tmp/hls-segment-url.txt)" -o /tmp/edge-segment.ts
+          node -e 'const fs=require("node:fs");const b=fs.readFileSync("/tmp/edge-segment.ts");if(b.length<188||b.length%188!==0)process.exit(1);for(let i=0;i<b.length;i+=188)if(b[i]!==0x47)process.exit(1);console.log("HLS transport stream validated: "+b.length+" bytes")'
+
+      - name: Verify public catalog isolation and signature requirement
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent --retry 3 \
+            'https://media.pincodeit.com/public-resolve?key=movie%3A987654321' > /tmp/public-catalog.json
+          node -e 'const r=require("/tmp/public-catalog.json");if(!Array.isArray(r.sources))process.exit(1);console.log("Public catalog responded")'
+          status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            'https://media.pincodeit.com/m/media/diagnostic/edge-health.mp4')"
+          test "$status" = 403
+          private_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            'https://media.pincodeit.com/resolve?key=movie%3A123')"
+          test "$private_status" = 401 -o "$private_status" = 503
+          echo "Unsigned media blocked; private catalog fail-closed"
