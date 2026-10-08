@@ -18,7 +18,13 @@ const registry = own as Registry;
  * TMDB contains metadata, never playable video URLs.
  */
 function hostAllowed(host: string, source: "local" | "remote"): boolean {
-  if (host === "vod.cineplexbd.net") return true;
+  if (
+    host === "vod.cineplexbd.net" ||
+    host === "cineplexbd.net" ||
+    host === "cds3.cineplexbd.net"
+  ) {
+    return true;
+  }
   const configured = (process.env.MEDIA_SOURCE_ALLOWED_HOSTS ?? "")
     .split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
   return source === "local" ? configured.length === 0 || configured.includes(host) :

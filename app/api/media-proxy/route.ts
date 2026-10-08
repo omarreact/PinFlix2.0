@@ -10,6 +10,8 @@ function allowedHosts() {
     .filter(Boolean);
   const defaults = [
     "vod.cineplexbd.net",
+    "cineplexbd.net",
+    "cds3.cineplexbd.net",
     "demo.unified-streaming.com",
     "test-streams.mux.dev",
     "vjs.zencdn.net",

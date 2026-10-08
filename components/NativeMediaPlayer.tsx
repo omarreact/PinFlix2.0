@@ -29,16 +29,33 @@ interface NativeMediaPlayerProps {
 }
 
 /**
- * Builds prioritized ISP CDN candidate streams for a title.
- * Checks http://vod.cineplexbd.net:8081 before any third-party fallbacks.
+ * URL encodes characters per CineplexBD directory conventions
+ * (Spaces as %20, parentheses as %28 / %29, brackets as %5B / %5D).
+ */
+function encodeCineplex(str: string): string {
+  return encodeURIComponent(str)
+    .replace(/\(/g, "%28")
+    .replace(/\)/g, "%29")
+    .replace(/\[/g, "%5B")
+    .replace(/\]/g, "%5D");
+}
+
+/**
+ * Builds prioritized ISP CDN candidate streams for a title based on
+ * CineplexBD's observed directory hierarchy:
+ * /movies/<Category>/<Year>/<Title> (<Year>) 1080p/<Title>.mp4/index.m3u8
  */
 function buildIspCandidates(
   item: LibraryTitle,
   season?: number,
   episode?: number,
 ): StreamCandidate[] {
+  const rawTitle = (item.title || "").trim();
+  const yr = item.year || new Date().getFullYear().toString();
+  const encodedTitle = encodeCineplex(rawTitle);
+  const releaseFolder = `${encodedTitle}%20%28${yr}%29%201080p`;
   const slug =
-    (item.title || "")
+    rawTitle
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "") || String(item.id);
@@ -48,11 +65,19 @@ function buildIspCandidates(
     const e = String(episode ?? 1).padStart(2, "0");
     const directMp4 = `${ISP_CDN_BASE}/tv/${slug}/s${s}e${e}.mp4`;
     const directHls = `${ISP_CDN_BASE}/tv/${slug}/s${s}e${e}/master.m3u8`;
+    const cineplexSeriesHls = `${ISP_CDN_BASE}/tv/${encodedTitle}/Season%20${s}/Episode%20${e}.mp4/index.m3u8`;
+
     return [
       {
         url: directMp4,
         kind: "mp4",
         label: `Primary ISP CDN MP4 (vod.cineplexbd.net:8081)`,
+        isIsp: true,
+      },
+      {
+        url: cineplexSeriesHls,
+        kind: "hls",
+        label: `CineplexBD Series HLS S${s}E${e}`,
         isIsp: true,
       },
       {
@@ -76,32 +101,61 @@ function buildIspCandidates(
     ];
   }
 
-  // Movie candidates
-  const directMp4 = `${ISP_CDN_BASE}/movies/${slug}.mp4`;
-  const directHls = `${ISP_CDN_BASE}/movies/${slug}/master.m3u8`;
+  // Exact observed CineplexBD movie directory hierarchy
+  const cineplexEnglishHls = `${ISP_CDN_BASE}/movies/English%20Movies/${yr}/${releaseFolder}/${encodedTitle}.mp4/index.m3u8`;
+  const cineplexEnglishMp4 = `${ISP_CDN_BASE}/movies/English%20Movies/${yr}/${releaseFolder}/${encodedTitle}.mp4`;
+  const cineplexHindiHls = `${ISP_CDN_BASE}/movies/Hindi%20Movies/${yr}/${releaseFolder}/${encodedTitle}.mp4/index.m3u8`;
+  const cineplexDubbedHls = `${ISP_CDN_BASE}/movies/Hindi%20Dubbed/English%20Movies/${yr}/${releaseFolder}/${encodedTitle}.mp4/index.m3u8`;
+  const standardMp4 = `${ISP_CDN_BASE}/movies/${slug}.mp4`;
+  const standardHls = `${ISP_CDN_BASE}/movies/${slug}/master.m3u8`;
+
   return [
     {
-      url: directMp4,
+      url: cineplexEnglishHls,
+      kind: "hls",
+      label: "CineplexBD 1080p HLS (English Movies)",
+      isIsp: true,
+    },
+    {
+      url: cineplexEnglishMp4,
+      kind: "mp4",
+      label: "CineplexBD Direct MP4 (English Movies)",
+      isIsp: true,
+    },
+    {
+      url: cineplexHindiHls,
+      kind: "hls",
+      label: "CineplexBD HLS (Hindi Movies)",
+      isIsp: true,
+    },
+    {
+      url: cineplexDubbedHls,
+      kind: "hls",
+      label: "CineplexBD HLS (Hindi Dubbed)",
+      isIsp: true,
+    },
+    {
+      url: standardMp4,
       kind: "mp4",
       label: "Primary ISP CDN MP4 (vod.cineplexbd.net:8081)",
       isIsp: true,
     },
     {
-      url: directHls,
+      url: standardHls,
       kind: "hls",
       label: "Primary ISP CDN HLS (vod.cineplexbd.net:8081)",
       isIsp: true,
     },
     {
-      url: `/api/media-proxy?url=${encodeURIComponent(directMp4)}`,
-      kind: "mp4",
-      label: "ISP CDN Proxy MP4 (vod.cineplexbd.net:8081)",
+      url: `/api/media-proxy?url=${encodeURIComponent(cineplexEnglishHls)}`,
+      kind: "hls",
+      label: "CineplexBD Proxy HLS",
       isIsp: true,
     },
     {
-      url: `/api/media-proxy?url=${encodeURIComponent(directHls)}`,
-      kind: "hls",
-      label: "ISP CDN Proxy HLS (vod.cineplexbd.net:8081)",
+      url: `/api/media-proxy?url=${encodeURIComponent(standardMp4)}`,
+      kind: "mp4",
+      label: "ISP CDN Proxy MP4",
       isIsp: true,
     },
   ];
@@ -118,7 +172,9 @@ function getPrioritizedCandidates(
   episode?: number,
 ): StreamCandidate[] {
   const isSourceIsp =
-    source.url.includes("vod.cineplexbd.net") || source.url.includes(":8081");
+    source.url.includes("vod.cineplexbd.net") ||
+    source.url.includes("cineplexbd.net") ||
+    source.url.includes(":8081");
 
   const ispCandidates = buildIspCandidates(item, season, episode);
 
@@ -142,7 +198,7 @@ function getPrioritizedCandidates(
       label: "ISP CDN Proxy (vod.cineplexbd.net:8081)",
       isIsp: true,
     };
-    return [explicitIsp, explicitProxy, fallbackCandidate];
+    return [explicitIsp, explicitProxy, ...ispCandidates, fallbackCandidate];
   }
 
   // Strictly check ISP CDN first before third-party fallbacks

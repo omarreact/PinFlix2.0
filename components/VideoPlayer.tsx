@@ -818,17 +818,36 @@ export default function VideoPlayer({
                 <p className="text-xs font-semibold text-zinc-200">
                   Add Direct Stream (.m3u8 HLS or .mp4)
                 </p>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setCustomUrlInput(
-                      `http://vod.cineplexbd.net:8081/movies/${title ? title.toLowerCase().replace(/[^a-z0-9]+/g, "-") : id}.mp4`,
-                    )
-                  }
-                  className="rounded-md border border-accent/30 bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent hover:bg-accent/20"
-                >
-                  ⚡ Fill ISP CDN (vod.cineplexbd.net:8081)
-                </button>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cleanTitle = (title || "Movie").trim();
+                      const encTitle = encodeURIComponent(cleanTitle).replace(/\(/g, "%28").replace(/\)/g, "%29");
+                      const yr = year || "2026";
+                      setCustomUrlInput(
+                        `http://vod.cineplexbd.net:8081/movies/English%20Movies/${yr}/${encTitle}%20%28${yr}%29%201080p/${encTitle}.mp4/index.m3u8`,
+                      );
+                    }}
+                    className="rounded-md border border-accent/30 bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent hover:bg-accent/20"
+                  >
+                    ⚡ CineplexBD HLS (.m3u8)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cleanTitle = (title || "Movie").trim();
+                      const encTitle = encodeURIComponent(cleanTitle).replace(/\(/g, "%28").replace(/\)/g, "%29");
+                      const yr = year || "2026";
+                      setCustomUrlInput(
+                        `http://vod.cineplexbd.net:8081/movies/English%20Movies/${yr}/${encTitle}%20%28${yr}%29%201080p/${encTitle}.mp4`,
+                      );
+                    }}
+                    className="rounded-md border border-white/20 bg-zinc-800 px-2 py-0.5 text-[11px] font-medium text-zinc-200 hover:bg-zinc-700"
+                  >
+                    ⚡ CineplexBD MP4
+                  </button>
+                </div>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input
