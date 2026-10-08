@@ -147,7 +147,7 @@ export default function TitleView({
               sizes="100vw"
               className="object-cover opacity-30"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/70 to-transparent" />
+            <div className="absolute inset-0 bg-[#0b100e]/70" />
           </div>
         )}
 
@@ -157,7 +157,7 @@ export default function TitleView({
             <section
               id="player"
               aria-label="Watch player"
-              className="scroll-mt-24 rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.055] to-white/[0.015] p-3 shadow-[0_20px_60px_rgba(0,0,0,0.25)] sm:p-4"
+              className="scroll-mt-24 rounded-2xl border border-white/15 bg-surface p-3 sm:p-4"
             >
               <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>
@@ -318,7 +318,7 @@ export default function TitleView({
               / {titleOf(d)}
               {type === "tv" && currentEp ? ` / ${currentEp.name}` : ""}
             </p>
-            <h1 className="mt-3 font-display text-3xl font-bold uppercase leading-tight sm:text-5xl">
+            <h1 className="mt-3 font-display text-3xl font-medium leading-tight sm:text-5xl">
               {titleOf(d)}
             </h1>
             {d.tagline && (
@@ -344,13 +344,13 @@ export default function TitleView({
               {d.genres.map((g) => (
                 <span
                   key={g.id}
-                  className="rounded bg-accent px-2 py-0.5 text-[10px] font-bold text-black"
+                  className="rounded-md border border-accent/50 bg-accent/10 px-2 py-1 text-xs text-accent"
                 >
                   {g.name}
                 </span>
               ))}
             </div>
-            <p className="mt-4 max-w-3xl text-sm leading-relaxed text-zinc-300">
+            <p className="mt-4 max-w-3xl text-base leading-7 text-white/85">
               {d.overview}
             </p>
             {director && (
