@@ -180,6 +180,20 @@ export default {
     }
     if (!["GET", "HEAD"].includes(request.method)) return reply(request, env, { error: "Method not allowed" }, 405);
     if (url.pathname === "/health") return reply(request, env, { service: "pinflix-media-api", status: "ok", r2: !!env.MEDIA });
+    if (url.pathname === "/diagnostic" && request.method === "GET") {
+      // Original one-second blue test frame, never a commercial film.
+      if (!env.SIGNING_KEY || !env.MEDIA) return reply(request, env, { error: "Not configured" }, 503);
+      const key = "media/diagnostic/edge-health.mp4";
+      const asset = await env.MEDIA.head(key);
+      if (!asset) return reply(request, env, { error: "Diagnostic asset unavailable" }, 503);
+      const exp = Math.floor(Date.now() / 1000) + 300;
+      return reply(request, env, {
+        status: "ready", label: "PinFlix diagnostic test clip",
+        durationHintSeconds: 1,
+        kind: "mp4", bytes: asset.size,
+        playbackUrl: await signedUrl(env, url.origin, key, exp),
+      });
+    }
     if (url.pathname === "/resolve" && request.method === "GET") return catalogResponse(request, env, url);
     if (url.pathname.startsWith("/m/")) {
       try { return await mediaResponse(request, env, url); }
