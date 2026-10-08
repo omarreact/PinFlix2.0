@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
+import Image from "@/components/TmdbImage";
 import Link from "next/link";
 import { genresOf, img, tmdb, titleOf, type MediaType, type Title } from "@/lib/tmdb";
 
