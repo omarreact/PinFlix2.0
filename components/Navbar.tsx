@@ -16,14 +16,14 @@ export const LINKS = [
 export function Logo() {
   return (
     <Link href="/" className="group flex items-center gap-2.5" aria-label="PinFlix home">
-      <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-accent text-[#071005] shadow-[0_0_26px_rgba(117,242,60,0.16)] transition group-hover:scale-105">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-[#0b100e] transition group-hover:bg-accent-soft">
         <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
           <path d="M8 5v14l11-7z" />
         </svg>
       </span>
-      <span className="font-display text-[17px] font-bold tracking-[-0.045em] text-white">
+      <span className="font-display text-lg font-medium tracking-[-0.035em] text-white">
         PinFlix
-        <sup className="ml-1 align-super text-[8px] font-extrabold tracking-normal text-accent">
+        <sup className="ml-1 align-super text-[11px] font-medium tracking-normal text-accent">
           2.0
         </sup>
       </span>
@@ -80,6 +80,14 @@ export default function Navbar() {
     };
   }, [q]);
 
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { setMenu(false); setFocus(false); }
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, []);
+
   const shown = q.trim().length < 2 ? [] : results;
   const go = (t: Title) => {
     setFocus(false);
@@ -93,21 +101,23 @@ export default function Navbar() {
 
   return (
     <nav
+      aria-label="Main navigation"
       className={`fixed inset-x-0 top-0 z-50 border-b transition-all duration-300 ${
         solid || menu
-          ? "border-white/[0.07] bg-[#080a08]/88 shadow-[0_12px_40px_rgba(0,0,0,0.28)] backdrop-blur-xl"
-          : "border-transparent bg-gradient-to-b from-black/70 via-black/30 to-transparent"
+          ? "border-white/10 bg-[#0b100e]"
+          : "border-white/10 bg-[#0b100e]/95"
       }`}
     >
       <div className="mx-auto flex h-[68px] max-w-[1600px] items-center gap-7 px-4 sm:px-8">
         <Logo />
 
-        <ul className="hidden items-center gap-1 rounded-full border border-white/[0.06] bg-white/[0.035] p-1 text-xs font-bold text-white/70 md:flex">
+        <ul className="hidden items-center gap-1 rounded-lg border border-white/10 bg-white/5 p-1 text-sm font-medium text-white/70 md:flex">
           {LINKS.map((l) => (
             <li key={l.href}>
               <Link
                 href={l.href}
-                className={`block rounded-full px-4 py-2 transition ${
+                aria-current={active(l.href) ? "page" : undefined}
+                className={`block rounded-md px-4 py-2 transition ${
                   active(l.href)
                     ? "bg-white/10 text-white"
                     : "hover:bg-white/[0.06] hover:text-white"
@@ -127,6 +137,7 @@ export default function Navbar() {
                 value={q}
                 onFocus={() => setFocus(true)}
                 onChange={(e) => setQ(e.target.value)}
+                aria-label="Search movies and TV shows"
                 placeholder="Search movies & shows"
                 className="w-full bg-transparent text-xs font-medium outline-none placeholder:text-white/35"
               />
@@ -175,13 +186,16 @@ export default function Navbar() {
 
           <Link
             href="/browse/movie"
-            className="rounded-full bg-accent px-4 py-2.5 text-[11px] font-extrabold text-[#071005] transition hover:-translate-y-0.5 hover:bg-[#91ff5d]"
+            className="rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-[#0b100e] transition hover:bg-accent-soft"
           >
             Explore
           </Link>
 
           <button
-            aria-label="Menu"
+            type="button"
+            aria-label={menu ? "Close menu" : "Open menu"}
+            aria-expanded={menu}
+            aria-controls="pinflix-mobile-menu"
             onClick={() => setMenu((m) => !m)}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] md:hidden"
           >
@@ -191,12 +205,13 @@ export default function Navbar() {
       </div>
 
       {menu && (
-        <div className="animate-fade-in border-t border-white/[0.07] bg-[#080a08]/96 px-4 pb-5 pt-4 backdrop-blur-xl md:hidden">
+        <div id="pinflix-mobile-menu" className="animate-fade-in border-t border-white/10 bg-[#0b100e] px-4 pb-5 pt-4 md:hidden">
           <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5">
             <Search size={15} />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
+              aria-label="Search movies and TV shows on mobile"
               placeholder="Search movies & shows"
               className="w-full bg-transparent text-sm outline-none placeholder:text-white/35"
             />
