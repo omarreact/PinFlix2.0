@@ -17,10 +17,24 @@ export function ActionBar({ storageId, item }: { storageId: string; item: Librar
   const [liked, setLiked] = useState(() => read(`like:${storageId}`, false));
   const [saved, setSaved] = useState(false);
   useEffect(() => {
-    const legacy = read(`list:${storageId}`, false);
-    if (legacy && !isSaved(item)) setWatchlist(item, true);
-    setSaved(isSaved(item));
-  }, [storageId, item.type, item.id, item.title, item.year, item.posterPath]);
+    const legacyKey = `list:${storageId}`;
+    // One-time migration: remove the legacy flag so removing an item stays removed.
+    const restore = () => {
+      const legacy = read(legacyKey, false);
+      if (legacy && !isSaved(item)) setWatchlist(item, true);
+      window.localStorage.removeItem(legacyKey);
+      setSaved(isSaved(item));
+    };
+    const sync = () => setSaved(isSaved(item));
+    const timer = window.setTimeout(restore, 0);
+    window.addEventListener("pinflix:library-changed", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("pinflix:library-changed", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, [storageId, item]);
   const [copied, setCopied] = useState(false);
 
   const toggle = (k: string, v: boolean, set: (b: boolean) => void) => {
@@ -52,7 +66,7 @@ export function ActionBar({ storageId, item }: { storageId: string; item: Librar
         onClick={() => {
           setWatchlist(item, !saved);
           setSaved(!saved);
-          localStorage.setItem(`list:${storageId}`, JSON.stringify(!saved));
+
         }}
         className={btn}
       >

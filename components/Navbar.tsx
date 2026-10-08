@@ -57,7 +57,7 @@ export default function Navbar() {
 
   useEffect(() => {
     if (q.trim().length < 2) {
-      setResults([]);
+      // Results are hidden by "shown" below until the query is valid.
       return;
     }
 

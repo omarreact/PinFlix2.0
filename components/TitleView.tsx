@@ -31,10 +31,10 @@ export default function TitleView() {
   const safeNumber = (n: number) => Number.isSafeInteger(n) && n > 0 && n <= 999 ? n : 1;
   const [d, setD] = useState<Details | null>(null);
   const [error, setError] = useState(false);
-  const [showPlayer, setShowPlayer] = useState(playParam === "1");
-  const [season, setSeason] = useState(() => safeNumber(urlSeason));
+  const showPlayer = playParam === "1";
+  const season = safeNumber(urlSeason);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
-  const [episode, setEpisode] = useState(() => safeNumber(urlEpisode));
+  const episode = safeNumber(urlEpisode);
 
   const updateSelection = (nextSeason: number, nextEpisode: number, play: boolean) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -45,14 +45,6 @@ export default function TitleView() {
     if (play) params.set("play", "1");
     router.replace(`/title/${type}/${id}?${params.toString()}`, { scroll: false });
   };
-
-  useEffect(() => {
-    if (type === "tv") {
-      setSeason(safeNumber(urlSeason));
-      setEpisode(safeNumber(urlEpisode));
-    }
-    if (playParam === "1") setShowPlayer(true);
-  }, [type, id, urlSeason, urlEpisode, playParam]);
 
   useEffect(() => {
     if (type !== "movie" && type !== "tv") return;
@@ -76,8 +68,6 @@ export default function TitleView() {
     tmdb<{ episodes: Episode[] }>(`/tv/${id}/season/${season}`, {}, ac.signal)
       .then((s) => {
         setEpisodes(s.episodes);
-        setEpisode((current) => s.episodes.some((e) => e.episode_number === current)
-          ? current : (s.episodes[0]?.episode_number ?? 1));
       })
       .catch(() => setEpisodes([]));
     return () => ac.abort();
@@ -154,10 +144,7 @@ export default function TitleView() {
                 />
               ) : (
                 <button
-                  onClick={() => {
-                    setShowPlayer(true);
-                    updateSelection(season, episode, true);
-                  }}
+                  onClick={() => updateSelection(season, episode, true)}
                   className="group relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-xl bg-zinc-900"
                 >
                   {d.backdrop_path && (
@@ -187,8 +174,6 @@ export default function TitleView() {
                       value={season}
                       onChange={(e) => {
                         const next = safeNumber(Number(e.target.value));
-                        setSeason(next);
-                        setEpisode(1);
                         updateSelection(next, 1, showPlayer);
                       }}
                       className="cursor-pointer appearance-none bg-transparent py-1.5 pl-3 pr-7 text-xs font-semibold outline-none [&>option]:bg-zinc-900"
@@ -210,8 +195,6 @@ export default function TitleView() {
                     <li key={e.id}>
                       <button
                         onClick={() => {
-                          setEpisode(e.episode_number);
-                          setShowPlayer(true);
                           updateSelection(season, e.episode_number, true);
                         }}
                         className={`flex w-full gap-3 rounded-lg p-2 text-left transition ${
