@@ -74,3 +74,8 @@ button:not(:disabled), select { cursor: pointer; }
     transition-duration: .01ms !important;
   }
 }
+
+/* Media-derived theme: smooth color changes, reduced-motion rules above still apply. */
+@media (prefers-reduced-motion: no-preference) {
+  html, body, .glass { transition: background-color 450ms ease, border-color 450ms ease, color 450ms ease; }
+}
