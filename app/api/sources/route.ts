@@ -7,9 +7,10 @@ export interface Source {
   label: string;
   url: string;
   kind: "hls" | "mp4";
+  subtitles?: Array<{ label: string; language: string; url: string }>;
 }
 
-type Item = { label?: unknown; url?: unknown };
+type Item = { label?: unknown; url?: unknown; subtitles?: unknown };
 type Registry = Record<string, unknown>;
 const registry = own as Registry;
 
@@ -39,7 +40,11 @@ function normalize(input: unknown, origin: "local" | "remote" | "public"): Sourc
       const kind = /\.m3u8$/i.test(url.pathname) ? "hls" :
         /\.mp4$/i.test(url.pathname) ? "mp4" : null;
       if (!kind) return [];
-      return [{ label: entry.label.trim().slice(0, 80) || "Media source",
+      const subtitles = Array.isArray(entry.subtitles) ? entry.subtitles.slice(0, 20).flatMap((track) => {
+        if (!track || typeof track !== "object" || typeof track.label !== "string" || typeof track.language !== "string" || typeof track.url !== "string") return [];
+        try { const u = new URL(track.url); return ["http:", "https:"].includes(u.protocol) && !u.username && !u.password && hostAllowed(u.hostname.toLowerCase(), origin) && /\.(srt|vtt)$/i.test(u.pathname) ? [{ label: track.label.slice(0, 80), language: track.language.slice(0, 20), url: u.href }] : []; } catch { return []; }
+      }) : [];
+      return [{ ...(subtitles.length ? { subtitles } : {}), label: entry.label.trim().slice(0, 80) || "Media source",
         url: url.toString(), kind }];
     } catch { return []; }
   });
@@ -112,7 +117,7 @@ async function archiveSource(title: string, year: string): Promise<Source[]> {
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
   const type = p.get("type");
-  const id = p.get("id") ?? "";
+  const id = (p.get("id") ?? p.get("tmdbId")) ?? "";
   const title = (p.get("title") ?? "").slice(0, 200);
   const year = (p.get("year") ?? "").slice(0, 4);
   const season = p.get("season");
@@ -125,7 +130,19 @@ export async function GET(req: NextRequest) {
 
   const keys = type === "tv" ?
     [`tv:${id}:s${season}e${episode}`, `tv:${id}`] : [`movie:${id}`];
-  const local = keys.flatMap((key) => normalize(registry[key], "local"));
+  // Optional private persistent registry on a Node/BDIX host. Vercel uses the
+  // bundled registry or remote catalog because its filesystem is ephemeral.
+  let activeRegistry = registry;
+  if (process.env.MEDIA_REGISTRY_PATH) {
+    try {
+      const { readFile } = await import("node:fs/promises");
+      const loaded: unknown = JSON.parse(await readFile(process.env.MEDIA_REGISTRY_PATH, "utf8"));
+      activeRegistry = loaded && typeof loaded === "object" && !Array.isArray(loaded) ? loaded as Registry : {};
+    } catch { activeRegistry = {}; }
+  }
+  const delisted = new Set((process.env.MEDIA_DELISTED_KEYS ?? "").split(",").map((key) => key.trim()));
+  if (keys.some((key) => delisted.has(key))) return NextResponse.json({ sources: [] }, { headers: { "Cache-Control": "no-store" } });
+  const local = keys.flatMap((key) => normalize(activeRegistry[key], "local"));
   const [remote, archive] = await Promise.all([
     licensedCatalog(keys[0], type, id, season, episode),
     type === "movie" && title ? archiveSource(title, year) : Promise.resolve([]),

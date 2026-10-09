@@ -3,21 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { getProgress, saveProgress, type LibraryTitle } from "@/lib/library";
 import { syncProgressToCloud } from "@/lib/cloud-library";
-
-export const ISP_CDN_BASE = "http://vod.cineplexbd.net:8081";
-
-export interface PlayableSource {
-  label: string;
-  url: string;
-  kind: "hls" | "mp4";
-}
-
-export interface StreamCandidate {
-  url: string;
-  kind: "hls" | "mp4";
-  label: string;
-  isIsp: boolean;
-}
+import type { PlayableSource } from "@/lib/playback";
+export type { PlayableSource } from "@/lib/playback";
 
 interface NativeMediaPlayerProps {
   source: PlayableSource;
@@ -28,339 +15,91 @@ interface NativeMediaPlayerProps {
   onEnded?: () => void;
 }
 
-/**
- * URL encodes characters per CineplexBD directory conventions
- * (Spaces as %20, parentheses as %28 / %29, brackets as %5B / %5D).
- */
-function encodeCineplex(str: string): string {
-  return encodeURIComponent(str)
-    .replace(/\(/g, "%28")
-    .replace(/\)/g, "%29")
-    .replace(/\[/g, "%5B")
-    .replace(/\]/g, "%5D");
-}
-
-/**
- * Builds prioritized ISP CDN candidate streams for a title based on
- * CineplexBD's observed directory hierarchy:
- * /movies/<Category>/<Year>/<Title> (<Year>) 1080p/<Title>.mp4/index.m3u8
- */
-function buildIspCandidates(
-  item: LibraryTitle,
-  season?: number,
-  episode?: number,
-): StreamCandidate[] {
-  const rawTitle = (item.title || "").trim();
-  const yr = item.year || new Date().getFullYear().toString();
-  const encodedTitle = encodeCineplex(rawTitle);
-  const releaseFolder = `${encodedTitle}%20%28${yr}%29%201080p`;
-  const slug =
-    rawTitle
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || String(item.id);
-
-  if (item.type === "tv") {
-    const s = String(season ?? 1).padStart(2, "0");
-    const e = String(episode ?? 1).padStart(2, "0");
-    const directMp4 = `${ISP_CDN_BASE}/tv/${slug}/s${s}e${e}.mp4`;
-    const directHls = `${ISP_CDN_BASE}/tv/${slug}/s${s}e${e}/master.m3u8`;
-    const cineplexSeriesHls = `${ISP_CDN_BASE}/tv/${encodedTitle}/Season%20${s}/Episode%20${e}.mp4/index.m3u8`;
-
-    return [
-      {
-        url: directMp4,
-        kind: "mp4",
-        label: `Primary ISP CDN MP4 (vod.cineplexbd.net:8081)`,
-        isIsp: true,
-      },
-      {
-        url: cineplexSeriesHls,
-        kind: "hls",
-        label: `CineplexBD Series HLS S${s}E${e}`,
-        isIsp: true,
-      },
-      {
-        url: directHls,
-        kind: "hls",
-        label: `Primary ISP CDN HLS (vod.cineplexbd.net:8081)`,
-        isIsp: true,
-      },
-      {
-        url: `/api/media-proxy?url=${encodeURIComponent(directMp4)}`,
-        kind: "mp4",
-        label: `ISP CDN Proxy MP4 (vod.cineplexbd.net:8081)`,
-        isIsp: true,
-      },
-      {
-        url: `/api/media-proxy?url=${encodeURIComponent(directHls)}`,
-        kind: "hls",
-        label: `ISP CDN Proxy HLS (vod.cineplexbd.net:8081)`,
-        isIsp: true,
-      },
-    ];
-  }
-
-  // Exact observed CineplexBD movie directory hierarchy
-  const cineplexEnglishHls = `${ISP_CDN_BASE}/movies/English%20Movies/${yr}/${releaseFolder}/${encodedTitle}.mp4/index.m3u8`;
-  const cineplexEnglishMp4 = `${ISP_CDN_BASE}/movies/English%20Movies/${yr}/${releaseFolder}/${encodedTitle}.mp4`;
-  const cineplexHindiHls = `${ISP_CDN_BASE}/movies/Hindi%20Movies/${yr}/${releaseFolder}/${encodedTitle}.mp4/index.m3u8`;
-  const cineplexDubbedHls = `${ISP_CDN_BASE}/movies/Hindi%20Dubbed/English%20Movies/${yr}/${releaseFolder}/${encodedTitle}.mp4/index.m3u8`;
-  const standardMp4 = `${ISP_CDN_BASE}/movies/${slug}.mp4`;
-  const standardHls = `${ISP_CDN_BASE}/movies/${slug}/master.m3u8`;
-
-  return [
-    {
-      url: cineplexEnglishHls,
-      kind: "hls",
-      label: "CineplexBD 1080p HLS (English Movies)",
-      isIsp: true,
-    },
-    {
-      url: cineplexEnglishMp4,
-      kind: "mp4",
-      label: "CineplexBD Direct MP4 (English Movies)",
-      isIsp: true,
-    },
-    {
-      url: cineplexHindiHls,
-      kind: "hls",
-      label: "CineplexBD HLS (Hindi Movies)",
-      isIsp: true,
-    },
-    {
-      url: cineplexDubbedHls,
-      kind: "hls",
-      label: "CineplexBD HLS (Hindi Dubbed)",
-      isIsp: true,
-    },
-    {
-      url: standardMp4,
-      kind: "mp4",
-      label: "Primary ISP CDN MP4 (vod.cineplexbd.net:8081)",
-      isIsp: true,
-    },
-    {
-      url: standardHls,
-      kind: "hls",
-      label: "Primary ISP CDN HLS (vod.cineplexbd.net:8081)",
-      isIsp: true,
-    },
-    {
-      url: `/api/media-proxy?url=${encodeURIComponent(cineplexEnglishHls)}`,
-      kind: "hls",
-      label: "CineplexBD Proxy HLS",
-      isIsp: true,
-    },
-    {
-      url: `/api/media-proxy?url=${encodeURIComponent(standardMp4)}`,
-      kind: "mp4",
-      label: "ISP CDN Proxy MP4",
-      isIsp: true,
-    },
-  ];
-}
-
-/**
- * Returns prioritized stream candidates, ensuring http://vod.cineplexbd.net:8081
- * is verified as the primary streaming source before attempting third-party fallbacks.
- */
-function getPrioritizedCandidates(
-  source: PlayableSource,
-  item: LibraryTitle,
-  season?: number,
-  episode?: number,
-): StreamCandidate[] {
-  const isSourceIsp =
-    source.url.includes("vod.cineplexbd.net") ||
-    source.url.includes("cineplexbd.net") ||
-    source.url.includes(":8081");
-
-  const ispCandidates = buildIspCandidates(item, season, episode);
-
-  const fallbackCandidate: StreamCandidate = {
-    url: source.url,
-    kind: source.kind,
-    label: source.label || "Third-party Fallback Source",
-    isIsp: false,
-  };
-
-  if (isSourceIsp) {
-    const explicitIsp: StreamCandidate = {
-      url: source.url,
-      kind: source.kind,
-      label: source.label || "ISP CDN (vod.cineplexbd.net:8081)",
-      isIsp: true,
-    };
-    const explicitProxy: StreamCandidate = {
-      url: `/api/media-proxy?url=${encodeURIComponent(source.url)}`,
-      kind: source.kind,
-      label: "ISP CDN Proxy (vod.cineplexbd.net:8081)",
-      isIsp: true,
-    };
-    return [explicitIsp, explicitProxy, ...ispCandidates, fallbackCandidate];
-  }
-
-  // Strictly check ISP CDN first before third-party fallbacks
-  return [...ispCandidates, fallbackCandidate];
-}
-
-export default function NativeMediaPlayer({
-  source,
-  item,
-  season,
-  episode,
-  onFatalError,
-  onEnded,
-}: NativeMediaPlayerProps) {
+export default function NativeMediaPlayer({ source, item, season, episode, onFatalError, onEnded }: NativeMediaPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const errorCallback = useRef(onFatalError);
-  const endedCallback = useRef(onEnded);
-  const itemRef = useRef({ item, season, episode });
+  const hlsRef = useRef<import("hls.js").default | null>(null);
+  const callbacks = useRef({ onFatalError, onEnded });
+  const mediaRef = useRef({ item, season, episode });
   const lastProgressWrite = useRef(0);
-  const [candidateIndex, setCandidateIndex] = useState(0);
+  const [levels, setLevels] = useState<Array<{ index: number; height: number }>>([]);
+  const [quality, setQuality] = useState(-1);
+  const [speed, setSpeed] = useState(1);
 
-  const candidates = getPrioritizedCandidates(source, item, season, episode);
-  const currentCandidate =
-    candidates[Math.min(candidateIndex, candidates.length - 1)];
+  useEffect(() => { callbacks.current = { onFatalError, onEnded }; mediaRef.current = { item, season, episode }; }, [onFatalError, onEnded, item, season, episode]);
 
-  useEffect(() => {
-    errorCallback.current = onFatalError;
-    endedCallback.current = onEnded;
-    itemRef.current = { item, season, episode };
-  }, [onFatalError, onEnded, item, season, episode]);
+  const persist = (completed = false) => {
+    const video = videoRef.current;
+    if (!video || !Number.isFinite(video.duration) || video.duration <= 0 || (video.currentTime <= 1 && !completed)) return;
+    const { item: media, season: s, episode: e } = mediaRef.current;
+    saveProgress(media, video.currentTime, video.duration, s, e, completed);
+    void syncProgressToCloud(media, video.currentTime, video.duration, s, e, completed);
+    lastProgressWrite.current = video.currentTime;
+  };
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !currentCandidate) return;
-
+    if (!video) return;
     let destroyed = false;
+    let failed = false;
     let hls: import("hls.js").default | null = null;
-
-    const handleCandidateFail = () => {
-      if (destroyed) return;
-      if (candidateIndex + 1 < candidates.length) {
-        setCandidateIndex((idx) => idx + 1);
-      } else {
-        errorCallback.current();
-      }
+    const fail = () => {
+      if (destroyed || failed) return;
+      failed = true;
+      callbacks.current.onFatalError();
     };
-
-    if (currentCandidate.kind === "mp4") {
-      video.src = currentCandidate.url;
+    const restore = () => {
+      const { item: media, season: s, episode: e } = mediaRef.current;
+      const saved = getProgress(media, s, e);
+      if (saved && !saved.completed && saved.seconds > 1 && saved.seconds < video.duration - 1) video.currentTime = saved.seconds;
+    };
+    const startup = window.setTimeout(() => { if (video.readyState < 2) fail(); }, 15000);
+    video.addEventListener("error", fail);
+    video.addEventListener("loadedmetadata", restore);
+    const flush = () => persist();
+    window.addEventListener("pagehide", flush);
+    if (source.kind === "mp4" || video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = source.url;
       video.load();
     } else {
-      void import("hls.js")
-        .then(({ default: Hls }) => {
-          if (destroyed) return;
-
-          if (Hls.isSupported()) {
-            const instance = new Hls({ enableWorker: true });
-            hls = instance;
-            instance.on(Hls.Events.ERROR, (_event, data) => {
-              if (data.fatal && !destroyed) {
-                handleCandidateFail();
-              }
-            });
-            instance.loadSource(currentCandidate.url);
-            instance.attachMedia(video);
-          } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-            video.src = currentCandidate.url;
-            video.load();
-          } else {
-            handleCandidateFail();
-          }
-        })
-        .catch(() => {
-          if (!destroyed) handleCandidateFail();
+      void import("hls.js").then(({ default: Hls }) => {
+        if (destroyed) return;
+        if (!Hls.isSupported()) { fail(); return; }
+        hls = new Hls({ enableWorker: true });
+        hlsRef.current = hls;
+        hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+          if (!destroyed) setLevels(data.levels.map((level, index) => ({ index, height: level.height })));
         });
+        hls.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) fail(); });
+        hls.loadSource(source.url);
+        hls.attachMedia(video);
+      }).catch(fail);
     }
-
     return () => {
+      persist();
       destroyed = true;
+      window.clearTimeout(startup);
+      window.removeEventListener("pagehide", flush);
+      video.removeEventListener("error", fail);
+      video.removeEventListener("loadedmetadata", restore);
       hls?.destroy();
-      video.pause();
-      video.removeAttribute("src");
-      video.load();
+      hlsRef.current = null;
+      video.pause(); video.removeAttribute("src"); video.load();
     };
-  }, [currentCandidate, candidateIndex, candidates.length]);
+    // Callbacks and title identity are refs; progress renders must not reload media.
+  }, [source.url, source.kind]);
 
-  const savePosition = (completed = false) => {
-    const video = videoRef.current;
-    if (!video || !Number.isFinite(video.duration) || video.duration <= 0) return;
-    const { item: media, season: s, episode: e } = itemRef.current;
-    if (video.currentTime > 1 || completed) {
-      saveProgress(media, video.currentTime, video.duration, s, e, completed);
-      void syncProgressToCloud(
-        media,
-        video.currentTime,
-        video.duration,
-        s,
-        e,
-        completed,
-      );
-      lastProgressWrite.current = video.currentTime;
-    }
-  };
-
-  const poster = item.posterPath?.startsWith("/")
-    ? `https://image.tmdb.org/t/p/w780${item.posterPath}`
-    : undefined;
-
-  return (
-    <div className="relative h-full w-full bg-black">
-      <video
-        ref={videoRef}
-        className="h-full w-full bg-black object-contain"
-        poster={poster}
-        controls
-        playsInline
-        preload="metadata"
-        controlsList="nodownload"
-        aria-label={`Play ${item.title} via ${currentCandidate?.label || source.label}`}
-        onLoadedMetadata={() => {
-          const video = videoRef.current;
-          if (!video || !Number.isFinite(video.duration) || video.duration <= 0) return;
-          const saved = getProgress(item, season, episode);
-          if (
-            saved &&
-            !saved.completed &&
-            saved.seconds > 10 &&
-            saved.seconds < video.duration - 30
-          ) {
-            video.currentTime = saved.seconds;
-          }
-        }}
-        onTimeUpdate={() => {
-          const video = videoRef.current;
-          if (video && Math.abs(video.currentTime - lastProgressWrite.current) >= 10) {
-            savePosition();
-          }
-        }}
-        onPause={() => savePosition()}
-        onEnded={() => {
-          savePosition(true);
-          endedCallback.current?.();
-        }}
-        onError={() => {
-          if (candidateIndex + 1 < candidates.length) {
-            setCandidateIndex((idx) => idx + 1);
-          } else {
-            errorCallback.current();
-          }
-        }}
-      >
-        <track kind="captions" />
-        Your browser cannot play this video.
-      </video>
-
-      {/* Primary ISP CDN status indicator overlay */}
-      {currentCandidate?.isIsp && (
-        <div className="pointer-events-none absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-black/70 px-2 py-1 text-[11px] font-semibold text-emerald-300 backdrop-blur-md">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-          <span>ISP BDIX CDN (vod.cineplexbd.net:8081)</span>
-        </div>
-      )}
+  const poster = item.posterPath?.startsWith("/") ? `https://image.tmdb.org/t/p/w780${item.posterPath}` : undefined;
+  return <div className="relative h-full w-full bg-black">
+    <video ref={videoRef} className="h-full w-full bg-black object-contain" poster={poster} controls playsInline preload="metadata" controlsList="nodownload" aria-label={`Play ${item.title} via ${source.label}`}
+      onTimeUpdate={() => { const video = videoRef.current; if (video && Math.abs(video.currentTime - lastProgressWrite.current) >= 5) persist(); }}
+      onPause={() => persist()}
+      onEnded={() => { persist(true); callbacks.current.onEnded?.(); }}>
+      {source.subtitles?.map((track) => <track key={`${track.language}-${track.url}`} kind="subtitles" srcLang={track.language} label={track.label} src={track.url} />)}
+      Your browser cannot play this video.
+    </video>
+    <div className="absolute right-3 top-3 flex gap-2 rounded-lg bg-black/70 p-2 text-xs text-white">
+      {levels.length > 1 && <label>Quality <select aria-label="Playback quality" className="bg-zinc-900" value={quality} onChange={(event) => { const index = Number(event.target.value); if (hlsRef.current) hlsRef.current.currentLevel = index; setQuality(index); }}><option value={-1}>Auto</option>{levels.map((level) => <option key={level.index} value={level.index}>{level.height ? `${level.height}p` : `Level ${level.index + 1}`}</option>)}</select></label>}
+      <label>Speed <select aria-label="Playback speed" className="bg-zinc-900" value={speed} onChange={(event) => { const rate = Number(event.target.value); if (videoRef.current) videoRef.current.playbackRate = rate; setSpeed(rate); }}>{[0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => <option key={rate} value={rate}>{rate}x</option>)}</select></label>
     </div>
-  );
+  </div>;
 }

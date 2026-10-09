@@ -7,9 +7,14 @@
     "build": "NODE_ENV=production next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test tests/*.test.mjs"
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "typecheck": "next typegen && tsc --noEmit",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build",
+    "hosting:check": "node --env-file-if-exists=.env.local scripts/hosting-check.mjs",
+    "ingest": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/ingest.mjs"
   },
   "dependencies": {
+    "cheerio": "^1.2.0",
     "firebase": "^13.0.0",
     "hls.js": "^1.7.3",
     "lucide-react": "^1.52.0",

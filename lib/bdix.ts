@@ -1,15 +1,6 @@
 "use client";
 
-/**
- * BDIX (Bangladesh Internet Exchange) Network Diagnostics & Routing Helpers
- *
- * In Bangladesh, domestic traffic peered through BDIX operates over ultra-low
- * latency (1-20ms) and unmetered gigabit speeds (up to 1 Gbps), decoupled
- * from capped international submarine transit.
- *
- * Media servers such as http://vod.cineplexbd.net:8081 reside inside this domestic
- * peering fabric and must be accessed directly by subscriber browsers.
- */
+/** Known media origins and optional server-to-origin diagnostics. */
 
 export const BDIX_PRIMARY_CDN = "http://vod.cineplexbd.net:8081";
 
@@ -66,41 +57,26 @@ export interface BdixProbeResult {
   timestamp: number;
 }
 
-/**
- * Tests direct browser reachability to a BDIX endpoint.
- * This runs client-side inside the user's browser, allowing verification of
- * whether the current connection is peered into the domestic BDIX fabric.
- */
+/** Tests application-server reachability, not subscriber network peering. */
 export async function probeBdixEndpoint(
   endpoint = BDIX_PRIMARY_CDN,
-  timeoutMs = 3000,
+  timeoutMs = 7000,
 ): Promise<BdixProbeResult> {
   if (typeof window === "undefined") {
     return { reachable: false, latencyMs: null, endpoint, timestamp: Date.now() };
   }
 
-  const start = performance.now();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    // Attempt fetch with mode 'no-cors' so cross-origin BDIX endpoints respond
-    // without requiring CORS headers on the static web root.
-    await fetch(`${endpoint}/favicon.ico?probe=${Date.now()}`, {
-      method: "HEAD",
-      mode: "no-cors",
-      cache: "no-store",
-      signal: controller.signal,
-    });
-
+    // Probe the application host's permitted origin connection. This does not
+    // claim browser peering, local RTT, or unmetered traffic.
+    const response = await fetch("/api/bdix/status", { cache: "no-store", signal: controller.signal });
+    const result = await response.json();
     clearTimeout(timeoutId);
-    const latencyMs = Math.round(performance.now() - start);
-    return {
-      reachable: true,
-      latencyMs,
-      endpoint,
-      timestamp: Date.now(),
-    };
+    return { reachable: response.ok && result.reachable === true, latencyMs: result.latencyMs ?? null, endpoint, timestamp: Date.now() };
+
   } catch {
     clearTimeout(timeoutId);
     return {

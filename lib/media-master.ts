@@ -21,6 +21,7 @@ export interface MasterMediaSource {
   kind: "hls" | "mp4";
   delivery: "direct" | "proxy";
   playbackUrl: string;
+  subtitles?: Array<{ label: string; language: string; url: string }>;
 }
 
 export interface MasterMediaResponse {
@@ -98,6 +99,16 @@ export function buildMasterMediaResponse(
           /\.mp4$/i.test(url.pathname) ? "mp4" : null;
         if (kind !== item.kind) continue;
         if (url.protocol === "http:" && !proxyHosts.has(host)) continue;
+        const subtitles = Array.isArray(item.subtitles) ? item.subtitles.slice(0, 20).flatMap((track) => {
+          if (!track || typeof track !== "object" || typeof track.label !== "string" || typeof track.language !== "string" || typeof track.url !== "string") return [];
+          try {
+            const sub = new URL(track.url);
+            if (!isPublicHostname(sub.hostname) || !hosts.has(sub.hostname.toLowerCase()) || sub.username || sub.password || !["http:", "https:"].includes(sub.protocol) || !/\.(srt|vtt)$/i.test(sub.pathname)) return [];
+            const proxy = sub.protocol === "http:" || /\.srt$/i.test(sub.pathname);
+            if (proxy && !proxyHosts.has(sub.hostname.toLowerCase())) return [];
+            return [{ label: track.label.slice(0, 80), language: track.language.slice(0, 20), url: proxy ? `/api/media-proxy?url=${encodeURIComponent(sub.href)}` : sub.href }];
+          } catch { return []; }
+        }) : [];
         seen.add(url.href);
         sources.push({
           id: `source-${sources.length + 1}`,
@@ -105,6 +116,7 @@ export function buildMasterMediaResponse(
           url: url.href,
           kind,
           delivery: url.protocol === "https:" ? "direct" : "proxy",
+          ...(subtitles.length ? { subtitles } : {}),
           playbackUrl: url.protocol === "https:"
             ? url.href
             : `/api/media-proxy?url=${encodeURIComponent(url.href)}`,
