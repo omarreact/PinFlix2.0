@@ -4,7 +4,7 @@ import { resolve, dirname } from 'node:path';
 const target = new URL(process.env.BDIX_ROOT_URL ?? 'http://cds3.cineplexbd.net/index.php');
 if (!['http:', 'https:'].includes(target.protocol) || target.hostname !== 'cds3.cineplexbd.net' || target.username || target.password || target.port) throw new Error('Use the CineplexBD directory origin.');
 const directory = dirname(resolve(process.env.MEDIA_REGISTRY_PATH ?? 'data/bdix-sources.json'));
-const report = { nodeVersion: process.versions.node, nodeSupported: Number(process.versions.node.split('.')[0]) >= 22, productionBuildExists: false, registryDirectoryWritable: false, originReachable: false, originStatus: null, originFailure: null };
+const report = { nodeVersion: process.versions.node, nodeSupported: Number(process.versions.node.split('.')[0]) > 24 || (Number(process.versions.node.split('.')[0]) === 24 && Number(process.versions.node.split('.')[1]) >= 12), productionBuildExists: false, registryDirectoryWritable: false, originReachable: false, originStatus: null, originFailure: null };
 try { await access('.next/BUILD_ID', constants.R_OK); report.productionBuildExists = true; } catch { /* Build required. */ }
 const probe = resolve(directory, `.pinflix-check-${process.pid}`);
 let created = false;

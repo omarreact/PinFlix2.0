@@ -1,6 +1,6 @@
 # PinFlix2.0 on cPanel / BDIX hosting
 
-The Vercel frontend, Firebase account/progress sync, and existing Cloudflare media catalog continue to work. A cPanel account is useful for domain DNS, email and an optional BDIX-connected Node server. It does not automatically connect Vercel to a local ISP network. Check that your plan supports Node 22 or newer, Passenger applications and outbound BDIX access before choosing this deployment.
+The Vercel frontend, Firebase account/progress sync, and existing Cloudflare media catalog continue to work. A cPanel account is useful for domain DNS, email and an optional BDIX-connected Node server. It does not automatically connect Vercel to a local ISP network. Check that your plan supports Node 24.12 or newer, Passenger applications and outbound BDIX access before choosing this deployment.
 
 ## cPanel Node application
 

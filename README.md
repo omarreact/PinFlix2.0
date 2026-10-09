@@ -17,7 +17,7 @@ TMDB metadata, and an authorized HLS/MP4 player. Playback is separate from metad
 
 ## Development
 
-Node.js 22 or later is recommended.
+Node.js 24.12 or later is recommended.
 
 ```bash
 npm ci
