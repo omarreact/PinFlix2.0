@@ -17,7 +17,7 @@ TMDB metadata, and an authorized HLS/MP4 player. Playback is separate from metad
 
 ## Development
 
-Node.js 22 or later is recommended.
+Node.js 24.12 or later is recommended.
 
 ```bash
 npm ci
@@ -137,3 +137,11 @@ watch-provider listings direct users to legitimate third-party services.
 This product uses the TMDB API but is not endorsed or certified by TMDB.
 Provider availability data originates from TMDB/JustWatch and may differ by
 country and subscription.
+
+## BDIX and cPanel hosting
+
+See [BDIX hosting setup](docs/BDIX-HOSTING.md) for Passenger startup, private
+TMDB-matched directory ingestion, hosting diagnostics and server reachability.
+Run `npm run check` for lint, generated Next route types, type checks, tests and
+the production build. Native playback preserves resolver proxy URLs, supports
+HLS quality selection, playback speed, resume and optional SRT/VTT captions.

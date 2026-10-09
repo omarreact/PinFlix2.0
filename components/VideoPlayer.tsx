@@ -17,6 +17,7 @@ import {
   Sun,
   Tv,
 } from "lucide-react";
+import { normalizePlaybackSource } from "@/lib/playback";
 import NativeMediaPlayer, { type PlayableSource } from "@/components/NativeMediaPlayer";
 import type { Video } from "@/lib/tmdb";
 import type { LibraryTitle } from "@/lib/library";
@@ -114,27 +115,6 @@ function episodeNumber(value: string | number | undefined): number {
   return Number.isSafeInteger(n) && n <= 999 ? n : 1;
 }
 
-function validSource(value: unknown): value is PlayableSource {
-  if (!value || typeof value !== "object") return false;
-  const entry = value as Record<string, unknown>;
-  if (
-    typeof entry.label !== "string" ||
-    typeof entry.url !== "string" ||
-    (entry.kind !== "hls" && entry.kind !== "mp4")
-  )
-    return false;
-  try {
-    const url = new URL(entry.url);
-    return (
-      (url.protocol === "https:" || url.protocol === "http:") &&
-      !url.username &&
-      !url.password &&
-      (entry.kind === "hls" ? /\.m3u8$/i : /\.mp4$/i).test(url.pathname)
-    );
-  } catch {
-    return false;
-  }
-}
 
 export default function VideoPlayer({
   tmdbId,
@@ -229,7 +209,7 @@ export default function VideoPlayer({
             ? data.sources
             : undefined;
         const sources: PlayableSource[] = Array.isArray(entries)
-          ? entries.filter(validSource)
+          ? entries.map(normalizePlaybackSource).filter((source): source is PlayableSource => source !== null)
           : [];
 
         if (!controller.signal.aborted) {
@@ -255,17 +235,11 @@ export default function VideoPlayer({
     return () => controller.abort();
   }, [mediaKey, type, id, validId, currentSeason, currentEpisode, title, year, refreshKey]);
 
-  // Combined native sources with ISP CDN (vod.cineplexbd.net:8081) strictly prioritized first
+  // Preserve the operator's resolver order and exact delivery URLs.
   const currentNativeSources = [
     ...customSources,
     ...(resolved.key === mediaKey ? resolved.sources : []),
-  ].sort((a, b) => {
-    const aIsIsp = a.url.includes("vod.cineplexbd.net") || a.url.includes(":8081");
-    const bIsIsp = b.url.includes("vod.cineplexbd.net") || b.url.includes(":8081");
-    if (aIsIsp && !bIsIsp) return -1;
-    if (!aIsIsp && bIsIsp) return 1;
-    return 0;
-  });
+  ];
 
   // Theater Mode / Lights Off body scroll & escape listener
   useEffect(() => {
@@ -352,7 +326,7 @@ export default function VideoPlayer({
       }
       const newSource: PlayableSource = {
         label: `Custom Direct ${isHls ? "HLS" : "MP4"}`,
-        url: customUrlInput.trim(),
+        url: parsed.protocol === "http:" ? `/api/media-proxy?url=${encodeURIComponent(parsed.href)}` : parsed.href,
         kind: isHls ? "hls" : "mp4",
       };
       setCustomSources((prev) => [newSource, ...prev]);
@@ -569,14 +543,14 @@ export default function VideoPlayer({
           {/* BDIX Peering Network Status Indicator */}
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/20 bg-emerald-950/25 px-3 py-2 text-xs">
             <div className="flex items-center gap-2">
-              <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className={`flex h-2 w-2 rounded-full ${bdixStatus?.reachable ? "bg-emerald-400" : "bg-zinc-500"}`} />
               <span className="font-semibold text-emerald-300">
-                BDIX Peering: vod.cineplexbd.net:8081
+                Media origin connection
               </span>
               <span className="text-[11px] text-zinc-400">
                 {bdixStatus?.reachable
-                  ? `(${bdixStatus.latencyMs}ms local RTT · Unmetered)`
-                  : "(Primary ISP CDN)"}
+                  ? `(Hosting server reached origin in ${bdixStatus.latencyMs}ms)`
+                  : "(Unverified or not configured)"}
               </span>
             </div>
             <button
@@ -586,7 +560,7 @@ export default function VideoPlayer({
               className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
             >
               <Activity size={12} />
-              {probingBdix ? "Testing..." : bdixStatus?.reachable ? "Retest BDIX Ping" : "Ping BDIX"}
+              {probingBdix ? "Testing..." : bdixStatus?.reachable ? "Retest connection" : "Check connection"}
             </button>
           </div>
 
