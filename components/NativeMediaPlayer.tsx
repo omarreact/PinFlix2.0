@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Maximize2, Minimize2 } from "lucide-react";
 import { getProgress, saveProgress, type LibraryTitle } from "@/lib/library";
 import { syncProgressToCloud } from "@/lib/cloud-library";
 
@@ -60,6 +61,9 @@ export default function NativeMediaPlayer({
   onEnded,
 }: NativeMediaPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const failedRef = useRef(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const errorCallback = useRef(onFatalError);
   const endedCallback = useRef(onEnded);
   const itemRef = useRef({ item, season, episode });
@@ -69,6 +73,39 @@ export default function NativeMediaPlayer({
   const candidates = getPrioritizedCandidates(source);
   const currentCandidate =
     candidates[Math.min(candidateIndex, candidates.length - 1)];
+
+  useEffect(() => {
+    const onChange = () => {
+      const entered = document.fullscreenElement === containerRef.current;
+      setIsFullscreen(entered);
+      if (!entered && screen.orientation?.unlock) {
+        try { screen.orientation.unlock(); } catch { /* Browser may disallow unlock. */ }
+      }
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    const element = containerRef.current;
+    if (!element) return;
+    try {
+      if (document.fullscreenElement === element) {
+        await document.exitFullscreen();
+        return;
+      }
+      if (element.requestFullscreen) {
+        await element.requestFullscreen();
+        // A best-effort lock: only supported browsers permit landscape locking.
+        try { await screen.orientation?.lock?.("landscape"); } catch { /* No orientation permission. */ }
+      } else {
+        const legacyVideo = videoRef.current as (HTMLVideoElement & {
+          webkitEnterFullscreen?: () => void;
+        }) | null;
+        legacyVideo?.webkitEnterFullscreen?.();
+      }
+    } catch { /* Fullscreen is optional; native controls remain available. */ }
+  };
 
   useEffect(() => {
     errorCallback.current = onFatalError;
@@ -81,13 +118,15 @@ export default function NativeMediaPlayer({
     if (!video || !currentCandidate) return;
 
     let destroyed = false;
+    failedRef.current = false;
     let hls: import("hls.js").default | null = null;
 
     const handleCandidateFail = () => {
       if (destroyed) return;
       if (candidateIndex + 1 < candidates.length) {
         setCandidateIndex((idx) => idx + 1);
-      } else {
+      } else if (!failedRef.current) {
+        failedRef.current = true;
         errorCallback.current();
       }
     };
@@ -154,7 +193,7 @@ export default function NativeMediaPlayer({
     : undefined;
 
   return (
-    <div className="relative h-full w-full bg-black">
+    <div ref={containerRef} className={`relative w-full bg-black ${isFullscreen ? "h-screen" : "h-full"}`}>
       <video
         ref={videoRef}
         className="h-full w-full bg-black object-contain"
@@ -189,6 +228,8 @@ export default function NativeMediaPlayer({
           endedCallback.current?.();
         }}
         onError={() => {
+          if (failedRef.current) return;
+          failedRef.current = true;
           if (candidateIndex + 1 < candidates.length) {
             setCandidateIndex((idx) => idx + 1);
           } else {
@@ -199,6 +240,16 @@ export default function NativeMediaPlayer({
         <track kind="captions" />
         Your browser cannot play this video.
       </video>
+
+      <button
+        type="button"
+        onClick={() => { void toggleFullscreen(); }}
+        aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen and rotate landscape when supported"}
+        title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+        className="absolute right-3 top-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/20 bg-black/50 text-white/90 backdrop-blur-md transition hover:bg-black/75"
+      >
+        {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+      </button>
 
       {/* Optional source indicator for an explicitly validated ISP origin */}
       {currentCandidate?.isIsp && (
