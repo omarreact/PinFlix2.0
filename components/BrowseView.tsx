@@ -80,7 +80,7 @@ export default function BrowseView() {
     const ac = new AbortController();
     // Search is performed against the entire title index, not the loaded page.
     // Four-digit queries switch to year discovery instead of title matching.
-    const searchYear = /^\\d{4}$/.test(appliedQuery) ? appliedQuery : "";
+    const searchYear = /^\d{4}$/.test(appliedQuery) ? appliedQuery : "";
     const titleQuery = searchYear ? "" : appliedQuery;
     const searchingTitles = titleQuery.length > 0;
     const params: Record<string, string> = {
@@ -135,9 +135,8 @@ export default function BrowseView() {
     const n = titleOf(t).toLowerCase();
     return (
       (!letter || n.startsWith(letter.toLowerCase())) &&
-      (!appliedQuery || /^\\d{4}$/.test(appliedQuery) || n.includes(appliedQuery.toLowerCase()))
-        // Genre filtering of title search is client-side per results page.
-        && (!genre || !appliedQuery || (t.genre_ids ?? []).includes(Number(genre)))
+      // Search returns titles globally; genre is a per-page refinement.
+      (!genre || !appliedQuery || (t.genre_ids ?? []).includes(Number(genre)))
     );
   });
   const reset = <T,>(set: (v: T) => void) => (v: T) => {
