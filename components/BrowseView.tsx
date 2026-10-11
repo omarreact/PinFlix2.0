@@ -54,7 +54,8 @@ export default function BrowseView() {
   const [sort, setSort] = useState(SORTS[0].v);
   const [page, setPage] = useState(1);
   const [letter, setLetter] = useState("");
-  const [filter, setFilter] = useState("");
+  const [filter, setFilter] = useState(useSearchParams().get("q") ?? "");
+  const [appliedQuery, setAppliedQuery] = useState(filter.trim());
   const [viewMode, setViewMode] = useState<"poster" | "wide">("poster");
   const [retryCount, setRetryCount] = useState(0);
   const [data, setData] = useState<{
@@ -65,24 +66,42 @@ export default function BrowseView() {
     error?: boolean;
   } | null>(null);
 
-  const key = `${type}|${genre}|${year}|${sort}|${page}|${retryCount}`;
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAppliedQuery(filter.trim());
+      setPage(1);
+    }, 320);
+    return () => clearTimeout(timer);
+  }, [filter]);
+
+  const key = `${type}|${genre}|${year}|${sort}|${page}|${appliedQuery}|${retryCount}`;
 
   useEffect(() => {
     const ac = new AbortController();
+    // Search is performed against the entire title index, not the loaded page.
+    // Four-digit queries switch to year discovery instead of title matching.
+    const searchYear = /^\\d{4}$/.test(appliedQuery) ? appliedQuery : "";
+    const titleQuery = searchYear ? "" : appliedQuery;
+    const searchingTitles = titleQuery.length > 0;
     const params: Record<string, string> = {
-      sort_by:
+      page: String(page),
+    };
+    if (searchingTitles) {
+      params.query = titleQuery;
+      if (year) params[type === "tv" ? "first_air_date_year" : "year"] = year;
+    } else {
+      params.sort_by =
         type === "tv" && sort.startsWith("primary_release")
           ? "first_air_date.desc"
-          : sort,
-      page: String(page),
-      "vote_count.gte": "50",
-    };
-    if (genre) params.with_genres = genre;
-    if (year)
-      params[type === "tv" ? "first_air_date_year" : "primary_release_year"] =
-        year;
+          : sort;
+      params["vote_count.gte"] = "50";
+      if (genre) params.with_genres = genre;
+      const selectedYear = year || searchYear;
+      if (selectedYear)
+        params[type === "tv" ? "first_air_date_year" : "primary_release_year"] = selectedYear;
+    }
     tmdb<{ results: Title[]; total_results: number; total_pages: number }>(
-      `/discover/${type}`,
+      searchingTitles ? `/search/${type}` : `/discover/${type}`,
       params,
       ac.signal,
     )
@@ -116,14 +135,16 @@ export default function BrowseView() {
     const n = titleOf(t).toLowerCase();
     return (
       (!letter || n.startsWith(letter.toLowerCase())) &&
-      (!filter || n.includes(filter.toLowerCase()))
+      (!appliedQuery || /^\\d{4}$/.test(appliedQuery) || n.includes(appliedQuery.toLowerCase()))
+        // Genre filtering of title search is client-side per results page.
+        && (!genre || !appliedQuery || (t.genre_ids ?? []).includes(Number(genre)))
     );
   });
   const reset = <T,>(set: (v: T) => void) => (v: T) => {
     set(v);
     setPage(1);
   };
-  const years = Array.from({ length: 40 }, (_, i) => String(2026 - i));
+  const years = Array.from({ length: 65 }, (_, i) => String(new Date().getFullYear() - i));
   const pages = data?.pages ?? 1;
   const pageNums = [page - 1, page, page + 1].filter((p) => p >= 1 && p <= pages);
 
@@ -147,9 +168,9 @@ export default function BrowseView() {
               <Search size={14} />
               <input
                 value={filter}
-                aria-label="Filter titles on this page"
+                aria-label={`Search all ${type === "tv" ? "TV shows" : "movies"} by title or release year`}
                 onChange={(e) => setFilter(e.target.value)}
-                placeholder="Filter this page…"
+                placeholder="Search all titles or year…"
                 className="w-full bg-transparent text-xs outline-none"
               />
             </div>
@@ -177,7 +198,7 @@ export default function BrowseView() {
               type="button"
               onClick={() => {
                 setGenre(""); setYear(""); setSort(SORTS[0].v);
-                setPage(1); setLetter(""); setFilter("");
+                setPage(1); setLetter(""); setFilter(""); setAppliedQuery("");
               }}
               className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-sm text-white/80 transition hover:border-accent hover:text-accent"
             >
@@ -193,7 +214,7 @@ export default function BrowseView() {
               <p className="text-[11px] text-zinc-400">
                 {loading
                   ? "Loading…"
-                  : `Showing ${items.length} of ${data!.total.toLocaleString()} results`}
+                  : `${appliedQuery ? "Search: " : "Showing "}${items.length} on this page · ${data!.total.toLocaleString()} catalog results`}
               </p>
               <div className="flex gap-2">
                 <Select label="Genre" value={genre} onChange={reset(setGenre)}>
@@ -247,7 +268,7 @@ export default function BrowseView() {
                   Unable to load titles
                 </h3>
                 <p className="text-xs text-zinc-400 max-w-sm mb-5">
-                  Failed to connect to the discovery service. Please check your network and try again.
+                  Catalog search is temporarily unavailable. Check your connection, then retry.
                 </p>
                 <button
                   type="button"
@@ -273,7 +294,7 @@ export default function BrowseView() {
             )}
             {!loading && !hasError && items.length === 0 && (
               <p className="py-16 text-center text-sm text-zinc-500">
-                Nothing matches these filters on this page.
+                No titles match. Try another title, year, or genre.
               </p>
             )}
 
