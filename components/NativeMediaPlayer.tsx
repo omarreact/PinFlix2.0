@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { getProgress, saveProgress, type LibraryTitle } from "@/lib/library";
 import { syncProgressToCloud } from "@/lib/cloud-library";
@@ -70,7 +70,8 @@ export default function NativeMediaPlayer({
   const lastProgressWrite = useRef(0);
   const [candidateIndex, setCandidateIndex] = useState(0);
 
-  const candidates = getPrioritizedCandidates(source);
+  const candidates = useMemo(() => getPrioritizedCandidates(source),
+    [source.url, source.playbackUrl, source.kind, source.label]);
   const currentCandidate =
     candidates[Math.min(candidateIndex, candidates.length - 1)];
 
