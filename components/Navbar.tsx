@@ -65,23 +65,40 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    if (q.trim().length < 2) return;
+    const query = q.trim();
+    if (query.length < 2) return;
 
     const ac = new AbortController();
     const t = setTimeout(() => {
       setSearching(true);
       setSearchError(false);
-      tmdb<{ results: Title[] }>("/search/multi", { query: q }, ac.signal)
+      // A year is a catalog discovery filter, not a movie title.
+      const year = /^\d{4}$/.test(query) ? query : "";
+      const request: Promise<{ results: Title[] }> = year
+        ? Promise.all([
+            tmdb<{ results: Title[] }>("/discover/movie", {
+              primary_release_year: year, sort_by: "popularity.desc",
+            }, ac.signal),
+            tmdb<{ results: Title[] }>("/discover/tv", {
+              first_air_date_year: year, sort_by: "popularity.desc",
+            }, ac.signal),
+          ]).then(([movies, tv]) => ({
+            results: [
+              ...movies.results.slice(0, 3).map((t) => ({ ...t, media_type: "movie" as const })),
+              ...tv.results.slice(0, 3).map((t) => ({ ...t, media_type: "tv" as const })),
+            ],
+          }))
+        : tmdb<{ results: Title[] }>("/search/multi", { query }, ac.signal);
+      request
         .then((d) => {
-          setResults(
-            d.results
-              .filter((r) => r.media_type === "movie" || r.media_type === "tv")
-              .slice(0, 6),
-          );
+          if (ac.signal.aborted) return;
+          setResults(d.results
+            .filter((r) => r.media_type === "movie" || r.media_type === "tv")
+            .slice(0, 6));
           setSearching(false);
         })
         .catch((err) => {
-          if (err.name !== "AbortError") {
+          if (err.name !== "AbortError" && !ac.signal.aborted) {
             setSearchError(true);
             setSearching(false);
           }
@@ -153,7 +170,7 @@ export default function Navbar() {
                 onFocus={() => setFocus(true)}
                 onChange={(e) => setQ(e.target.value)}
                 aria-label="Search movies and TV shows"
-                placeholder="Search movies & shows"
+                placeholder="Search titles or year"
                 className="w-full bg-transparent text-xs font-medium outline-none placeholder:text-white/35"
               />
             </div>
@@ -203,6 +220,14 @@ export default function Navbar() {
                     ))}
                   </ul>
                 )}
+                <div className="flex items-center justify-between gap-2 border-t border-white/10 px-3 py-2">
+                  <Link href={`/browse/movie?q=${encodeURIComponent(q.trim())}`} onClick={() => { setFocus(false); setMenu(false); }} className="text-[11px] font-bold text-accent hover:underline">
+                    All movies
+                  </Link>
+                  <Link href={`/browse/tv?q=${encodeURIComponent(q.trim())}`} onClick={() => { setFocus(false); setMenu(false); }} className="text-[11px] font-bold text-accent hover:underline">
+                    All TV shows
+                  </Link>
+                </div>
               </div>
             )}
           </div>
@@ -317,6 +342,12 @@ export default function Navbar() {
             />
           </div>
 
+          {q.trim().length >= 2 && (
+            <div className="mb-3 flex justify-between gap-3 text-xs">
+              <Link onClick={() => setMenu(false)} href={`/browse/movie?q=${encodeURIComponent(q.trim())}`} className="text-accent">Search movies</Link>
+              <Link onClick={() => setMenu(false)} href={`/browse/tv?q=${encodeURIComponent(q.trim())}`} className="text-accent">Search TV shows</Link>
+            </div>
+          )}
           {shown.length > 0 && (
             <div className="mb-4 space-y-1 rounded-xl border border-white/[0.06] bg-white/[0.025] p-1.5">
               {shown.slice(0, 4).map((r) => (
