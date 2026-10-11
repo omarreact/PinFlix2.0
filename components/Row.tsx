@@ -32,8 +32,6 @@ export default function Row({
 
   useEffect(() => {
     const ac = new AbortController();
-    setError(false);
-    setItems(null);
     tmdb<{ results: Title[] }>(path, JSON.parse(paramsKey) as Record<string, string>, ac.signal)
       .then((d) => { setItems(d.results); setError(false); })
       .catch((e) => { if (e.name !== "AbortError") setError(true); });
@@ -67,7 +65,7 @@ export default function Row({
     <section aria-label={title} className="px-4 py-6 sm:px-8">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-surface p-4">
         <p className="text-sm text-white/75">{title} could not load.</p>
-        <button type="button" onClick={() => setRetryCount((n) => n + 1)}
+        <button type="button" onClick={() => { setItems(null); setError(false); setRetryCount((n) => n + 1); }}
           className="rounded-lg border border-white/20 px-3 py-2 text-xs font-semibold text-accent hover:bg-white/10">
           Retry catalog
         </button>
