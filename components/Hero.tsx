@@ -1,20 +1,30 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import TmdbImage from "@/components/TmdbImage";
+import { img, tmdb, type Title } from "@/lib/tmdb";
 import Link from "next/link";
 import { ArrowRight, Play } from "lucide-react";
 
-const VIDEO_ID = "d9MyW72ELq0";
-
 export default function Hero() {
+  const [backdrop, setBackdrop] = useState<string | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    void tmdb<Title>("/movie/76600", {}, controller.signal)
+      .then((title) => setBackdrop(img(title.backdrop_path, "original")))
+      .catch(() => { /* Retain the lightweight gradient when metadata is unavailable. */ });
+    return () => controller.abort();
+  }, []);
+
   return (
     <header className="relative h-[76vh] min-h-[530px] max-h-[850px] w-full overflow-hidden border-b border-white/10 bg-black sm:h-[85vh] sm:min-h-[620px]">
       <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
-        <iframe
-          title="Avatar: The Way of Water official trailer"
-          src={`https://www.youtube-nocookie.com/embed/${VIDEO_ID}?autoplay=1&mute=1&controls=0&loop=1&playlist=${VIDEO_ID}&modestbranding=1&rel=0&playsinline=1&disablekb=1&fs=0`}
-          className="pointer-events-none absolute left-1/2 top-1/2 h-[56.25vw] min-h-full w-[177.77777778vh] min-w-full -translate-x-1/2 -translate-y-1/2 border-0"
-          allow="autoplay; encrypted-media; picture-in-picture"
-          referrerPolicy="strict-origin-when-cross-origin"
-          tabIndex={-1}
-        />
+        {backdrop ? (
+          <TmdbImage src={backdrop} alt="" fill priority sizes="100vw"
+            className="object-cover object-center" />
+        ) : (
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_25%,#263e50,transparent_60%),linear-gradient(135deg,#10171e,#07090b)]" />
+        )}
       </div>
 
       <div className="absolute inset-0 bg-black/55" />
@@ -24,7 +34,7 @@ export default function Hero() {
           <div className="max-w-xl animate-fade-up rounded-2xl border border-white/15 bg-[#0b100e]/90 p-5 sm:p-8">
             <div className="mb-4 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.28em] text-accent sm:text-[11px]">
               <span className="h-px w-8 bg-accent" />
-              Featured trailer
+              Featured movie
             </div>
 
             <h1 className="max-w-xl font-display text-4xl font-medium leading-[1.08] tracking-[-0.04em] text-white sm:text-5xl lg:text-6xl">
@@ -37,11 +47,11 @@ export default function Hero() {
 
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <Link
-                href="/title/movie/76600?play=1"
+                href="/title/movie/76600"
                 className="inline-flex items-center gap-2 rounded-full bg-accent px-6 py-3 text-sm font-bold text-[#0b100e] shadow-lg shadow-accent/20 transition hover:bg-accent-soft"
               >
-                <Play size={16} className="fill-current" />
-                Watch Movie Now
+                <Play size={16} />
+                Explore Movie
               </Link>
               <Link
                 href="/browse/movie"
@@ -56,7 +66,7 @@ export default function Hero() {
       </div>
 
       <div className="absolute bottom-5 right-4 hidden items-center gap-2 rounded-full border border-white/10 bg-black/35 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white/55 backdrop-blur sm:flex sm:right-8">
-        Muted autoplay
+        Featured catalog
       </div>
     </header>
   );
