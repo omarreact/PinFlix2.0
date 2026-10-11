@@ -4,12 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { getProgress, saveProgress, type LibraryTitle } from "@/lib/library";
 import { syncProgressToCloud } from "@/lib/cloud-library";
 
-export const ISP_CDN_BASE = "http://vod.cineplexbd.net:8081";
-
 export interface PlayableSource {
   label: string;
   url: string;
   kind: "hls" | "mp4";
+  playbackUrl?: string;
 }
 
 export interface StreamCandidate {
@@ -29,180 +28,27 @@ interface NativeMediaPlayerProps {
 }
 
 /**
- * URL encodes characters per CineplexBD directory conventions
- * (Spaces as %20, parentheses as %28 / %29, brackets as %5B / %5D).
+ * Play only resolved sources. TMDB titles do not imply an origin file exists.
+ * The master resolver supplies the validated playbackUrl for HTTP streams;
+ * custom HTTP streams may use the server proxy only when its host is approved.
+ * Retrying fabricated title-derived file paths slows the player dramatically.
  */
-function encodeCineplex(str: string): string {
-  return encodeURIComponent(str)
-    .replace(/\(/g, "%28")
-    .replace(/\)/g, "%29")
-    .replace(/\[/g, "%5B")
-    .replace(/\]/g, "%5D");
-}
-
-/**
- * Builds prioritized ISP CDN candidate streams for a title based on
- * CineplexBD's observed directory hierarchy:
- * /movies/<Category>/<Year>/<Title> (<Year>) 1080p/<Title>.mp4/index.m3u8
- */
-function buildIspCandidates(
-  item: LibraryTitle,
-  season?: number,
-  episode?: number,
-): StreamCandidate[] {
-  const rawTitle = (item.title || "").trim();
-  const yr = item.year || new Date().getFullYear().toString();
-  const encodedTitle = encodeCineplex(rawTitle);
-  const releaseFolder = `${encodedTitle}%20%28${yr}%29%201080p`;
-  const slug =
-    rawTitle
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || String(item.id);
-
-  if (item.type === "tv") {
-    const s = String(season ?? 1).padStart(2, "0");
-    const e = String(episode ?? 1).padStart(2, "0");
-    const directMp4 = `${ISP_CDN_BASE}/tv/${slug}/s${s}e${e}.mp4`;
-    const directHls = `${ISP_CDN_BASE}/tv/${slug}/s${s}e${e}/master.m3u8`;
-    const cineplexSeriesHls = `${ISP_CDN_BASE}/tv/${encodedTitle}/Season%20${s}/Episode%20${e}.mp4/index.m3u8`;
-
-    return [
-      {
-        url: directMp4,
-        kind: "mp4",
-        label: `Primary ISP CDN MP4 (vod.cineplexbd.net:8081)`,
-        isIsp: true,
-      },
-      {
-        url: cineplexSeriesHls,
-        kind: "hls",
-        label: `CineplexBD Series HLS S${s}E${e}`,
-        isIsp: true,
-      },
-      {
-        url: directHls,
-        kind: "hls",
-        label: `Primary ISP CDN HLS (vod.cineplexbd.net:8081)`,
-        isIsp: true,
-      },
-      {
-        url: `/api/media-proxy?url=${encodeURIComponent(directMp4)}`,
-        kind: "mp4",
-        label: `ISP CDN Proxy MP4 (vod.cineplexbd.net:8081)`,
-        isIsp: true,
-      },
-      {
-        url: `/api/media-proxy?url=${encodeURIComponent(directHls)}`,
-        kind: "hls",
-        label: `ISP CDN Proxy HLS (vod.cineplexbd.net:8081)`,
-        isIsp: true,
-      },
-    ];
+function getPrioritizedCandidates(source: PlayableSource): StreamCandidate[] {
+  let playbackUrl = source.playbackUrl || source.url;
+  try {
+    const url = new URL(playbackUrl);
+    if (url.protocol === "http:") {
+      playbackUrl = "/api/media-proxy?url=" + encodeURIComponent(url.href);
+    }
+  } catch {
+    // Relative first-party proxy URLs remain as they were provided.
   }
-
-  // Exact observed CineplexBD movie directory hierarchy
-  const cineplexEnglishHls = `${ISP_CDN_BASE}/movies/English%20Movies/${yr}/${releaseFolder}/${encodedTitle}.mp4/index.m3u8`;
-  const cineplexEnglishMp4 = `${ISP_CDN_BASE}/movies/English%20Movies/${yr}/${releaseFolder}/${encodedTitle}.mp4`;
-  const cineplexHindiHls = `${ISP_CDN_BASE}/movies/Hindi%20Movies/${yr}/${releaseFolder}/${encodedTitle}.mp4/index.m3u8`;
-  const cineplexDubbedHls = `${ISP_CDN_BASE}/movies/Hindi%20Dubbed/English%20Movies/${yr}/${releaseFolder}/${encodedTitle}.mp4/index.m3u8`;
-  const standardMp4 = `${ISP_CDN_BASE}/movies/${slug}.mp4`;
-  const standardHls = `${ISP_CDN_BASE}/movies/${slug}/master.m3u8`;
-
-  return [
-    {
-      url: cineplexEnglishHls,
-      kind: "hls",
-      label: "CineplexBD 1080p HLS (English Movies)",
-      isIsp: true,
-    },
-    {
-      url: cineplexEnglishMp4,
-      kind: "mp4",
-      label: "CineplexBD Direct MP4 (English Movies)",
-      isIsp: true,
-    },
-    {
-      url: cineplexHindiHls,
-      kind: "hls",
-      label: "CineplexBD HLS (Hindi Movies)",
-      isIsp: true,
-    },
-    {
-      url: cineplexDubbedHls,
-      kind: "hls",
-      label: "CineplexBD HLS (Hindi Dubbed)",
-      isIsp: true,
-    },
-    {
-      url: standardMp4,
-      kind: "mp4",
-      label: "Primary ISP CDN MP4 (vod.cineplexbd.net:8081)",
-      isIsp: true,
-    },
-    {
-      url: standardHls,
-      kind: "hls",
-      label: "Primary ISP CDN HLS (vod.cineplexbd.net:8081)",
-      isIsp: true,
-    },
-    {
-      url: `/api/media-proxy?url=${encodeURIComponent(cineplexEnglishHls)}`,
-      kind: "hls",
-      label: "CineplexBD Proxy HLS",
-      isIsp: true,
-    },
-    {
-      url: `/api/media-proxy?url=${encodeURIComponent(standardMp4)}`,
-      kind: "mp4",
-      label: "ISP CDN Proxy MP4",
-      isIsp: true,
-    },
-  ];
-}
-
-/**
- * Returns prioritized stream candidates, ensuring http://vod.cineplexbd.net:8081
- * is verified as the primary streaming source before attempting third-party fallbacks.
- */
-function getPrioritizedCandidates(
-  source: PlayableSource,
-  item: LibraryTitle,
-  season?: number,
-  episode?: number,
-): StreamCandidate[] {
-  const isSourceIsp =
-    source.url.includes("vod.cineplexbd.net") ||
-    source.url.includes("cineplexbd.net") ||
-    source.url.includes(":8081");
-
-  const ispCandidates = buildIspCandidates(item, season, episode);
-
-  const fallbackCandidate: StreamCandidate = {
-    url: source.url,
+  return [{
+    url: playbackUrl,
     kind: source.kind,
-    label: source.label || "Third-party Fallback Source",
+    label: source.label,
     isIsp: false,
-  };
-
-  if (isSourceIsp) {
-    const explicitIsp: StreamCandidate = {
-      url: source.url,
-      kind: source.kind,
-      label: source.label || "ISP CDN (vod.cineplexbd.net:8081)",
-      isIsp: true,
-    };
-    const explicitProxy: StreamCandidate = {
-      url: `/api/media-proxy?url=${encodeURIComponent(source.url)}`,
-      kind: source.kind,
-      label: "ISP CDN Proxy (vod.cineplexbd.net:8081)",
-      isIsp: true,
-    };
-    return [explicitIsp, explicitProxy, ...ispCandidates, fallbackCandidate];
-  }
-
-  // Strictly check ISP CDN first before third-party fallbacks
-  return [...ispCandidates, fallbackCandidate];
+  }];
 }
 
 export default function NativeMediaPlayer({
@@ -220,7 +66,7 @@ export default function NativeMediaPlayer({
   const lastProgressWrite = useRef(0);
   const [candidateIndex, setCandidateIndex] = useState(0);
 
-  const candidates = getPrioritizedCandidates(source, item, season, episode);
+  const candidates = getPrioritizedCandidates(source);
   const currentCandidate =
     candidates[Math.min(candidateIndex, candidates.length - 1)];
 
@@ -354,7 +200,7 @@ export default function NativeMediaPlayer({
         Your browser cannot play this video.
       </video>
 
-      {/* Primary ISP CDN status indicator overlay */}
+      {/* Optional source indicator for an explicitly validated ISP origin */}
       {currentCandidate?.isIsp && (
         <div className="pointer-events-none absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-black/70 px-2 py-1 text-[11px] font-semibold text-emerald-300 backdrop-blur-md">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
