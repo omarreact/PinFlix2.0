@@ -97,7 +97,12 @@ export default function NativeMediaPlayer({
       if (element.requestFullscreen) {
         await element.requestFullscreen();
         // A best-effort lock: only supported browsers permit landscape locking.
-        try { await screen.orientation?.lock?.("landscape"); } catch { /* No orientation permission. */ }
+        try {
+          const orientation = screen.orientation as ScreenOrientation & {
+            lock?: (value: "landscape") => Promise<void>;
+          };
+          await orientation?.lock?.("landscape");
+        } catch { /* No orientation permission. */ }
       } else {
         const legacyVideo = videoRef.current as (HTMLVideoElement & {
           webkitEnterFullscreen?: () => void;
