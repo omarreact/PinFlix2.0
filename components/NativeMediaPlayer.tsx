@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Maximize2, Minimize2 } from "lucide-react";
 import { getProgress, saveProgress, type LibraryTitle } from "@/lib/library";
 import { syncProgressToCloud } from "@/lib/cloud-library";
-
-export const ISP_CDN_BASE = "http://vod.cineplexbd.net:8081";
 
 export interface PlayableSource {
   label: string;
   url: string;
   kind: "hls" | "mp4";
+  playbackUrl?: string;
 }
 
 export interface StreamCandidate {
@@ -29,180 +29,27 @@ interface NativeMediaPlayerProps {
 }
 
 /**
- * URL encodes characters per CineplexBD directory conventions
- * (Spaces as %20, parentheses as %28 / %29, brackets as %5B / %5D).
+ * Play only resolved sources. TMDB titles do not imply an origin file exists.
+ * The master resolver supplies the validated playbackUrl for HTTP streams;
+ * custom HTTP streams may use the server proxy only when its host is approved.
+ * Retrying fabricated title-derived file paths slows the player dramatically.
  */
-function encodeCineplex(str: string): string {
-  return encodeURIComponent(str)
-    .replace(/\(/g, "%28")
-    .replace(/\)/g, "%29")
-    .replace(/\[/g, "%5B")
-    .replace(/\]/g, "%5D");
-}
-
-/**
- * Builds prioritized ISP CDN candidate streams for a title based on
- * CineplexBD's observed directory hierarchy:
- * /movies/<Category>/<Year>/<Title> (<Year>) 1080p/<Title>.mp4/index.m3u8
- */
-function buildIspCandidates(
-  item: LibraryTitle,
-  season?: number,
-  episode?: number,
-): StreamCandidate[] {
-  const rawTitle = (item.title || "").trim();
-  const yr = item.year || new Date().getFullYear().toString();
-  const encodedTitle = encodeCineplex(rawTitle);
-  const releaseFolder = `${encodedTitle}%20%28${yr}%29%201080p`;
-  const slug =
-    rawTitle
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || String(item.id);
-
-  if (item.type === "tv") {
-    const s = String(season ?? 1).padStart(2, "0");
-    const e = String(episode ?? 1).padStart(2, "0");
-    const directMp4 = `${ISP_CDN_BASE}/tv/${slug}/s${s}e${e}.mp4`;
-    const directHls = `${ISP_CDN_BASE}/tv/${slug}/s${s}e${e}/master.m3u8`;
-    const cineplexSeriesHls = `${ISP_CDN_BASE}/tv/${encodedTitle}/Season%20${s}/Episode%20${e}.mp4/index.m3u8`;
-
-    return [
-      {
-        url: directMp4,
-        kind: "mp4",
-        label: `Primary ISP CDN MP4 (vod.cineplexbd.net:8081)`,
-        isIsp: true,
-      },
-      {
-        url: cineplexSeriesHls,
-        kind: "hls",
-        label: `CineplexBD Series HLS S${s}E${e}`,
-        isIsp: true,
-      },
-      {
-        url: directHls,
-        kind: "hls",
-        label: `Primary ISP CDN HLS (vod.cineplexbd.net:8081)`,
-        isIsp: true,
-      },
-      {
-        url: `/api/media-proxy?url=${encodeURIComponent(directMp4)}`,
-        kind: "mp4",
-        label: `ISP CDN Proxy MP4 (vod.cineplexbd.net:8081)`,
-        isIsp: true,
-      },
-      {
-        url: `/api/media-proxy?url=${encodeURIComponent(directHls)}`,
-        kind: "hls",
-        label: `ISP CDN Proxy HLS (vod.cineplexbd.net:8081)`,
-        isIsp: true,
-      },
-    ];
+function getPrioritizedCandidates(source: PlayableSource): StreamCandidate[] {
+  let playbackUrl = source.playbackUrl || source.url;
+  try {
+    const url = new URL(playbackUrl);
+    if (url.protocol === "http:") {
+      playbackUrl = "/api/media-proxy?url=" + encodeURIComponent(url.href);
+    }
+  } catch {
+    // Relative first-party proxy URLs remain as they were provided.
   }
-
-  // Exact observed CineplexBD movie directory hierarchy
-  const cineplexEnglishHls = `${ISP_CDN_BASE}/movies/English%20Movies/${yr}/${releaseFolder}/${encodedTitle}.mp4/index.m3u8`;
-  const cineplexEnglishMp4 = `${ISP_CDN_BASE}/movies/English%20Movies/${yr}/${releaseFolder}/${encodedTitle}.mp4`;
-  const cineplexHindiHls = `${ISP_CDN_BASE}/movies/Hindi%20Movies/${yr}/${releaseFolder}/${encodedTitle}.mp4/index.m3u8`;
-  const cineplexDubbedHls = `${ISP_CDN_BASE}/movies/Hindi%20Dubbed/English%20Movies/${yr}/${releaseFolder}/${encodedTitle}.mp4/index.m3u8`;
-  const standardMp4 = `${ISP_CDN_BASE}/movies/${slug}.mp4`;
-  const standardHls = `${ISP_CDN_BASE}/movies/${slug}/master.m3u8`;
-
-  return [
-    {
-      url: cineplexEnglishHls,
-      kind: "hls",
-      label: "CineplexBD 1080p HLS (English Movies)",
-      isIsp: true,
-    },
-    {
-      url: cineplexEnglishMp4,
-      kind: "mp4",
-      label: "CineplexBD Direct MP4 (English Movies)",
-      isIsp: true,
-    },
-    {
-      url: cineplexHindiHls,
-      kind: "hls",
-      label: "CineplexBD HLS (Hindi Movies)",
-      isIsp: true,
-    },
-    {
-      url: cineplexDubbedHls,
-      kind: "hls",
-      label: "CineplexBD HLS (Hindi Dubbed)",
-      isIsp: true,
-    },
-    {
-      url: standardMp4,
-      kind: "mp4",
-      label: "Primary ISP CDN MP4 (vod.cineplexbd.net:8081)",
-      isIsp: true,
-    },
-    {
-      url: standardHls,
-      kind: "hls",
-      label: "Primary ISP CDN HLS (vod.cineplexbd.net:8081)",
-      isIsp: true,
-    },
-    {
-      url: `/api/media-proxy?url=${encodeURIComponent(cineplexEnglishHls)}`,
-      kind: "hls",
-      label: "CineplexBD Proxy HLS",
-      isIsp: true,
-    },
-    {
-      url: `/api/media-proxy?url=${encodeURIComponent(standardMp4)}`,
-      kind: "mp4",
-      label: "ISP CDN Proxy MP4",
-      isIsp: true,
-    },
-  ];
-}
-
-/**
- * Returns prioritized stream candidates, ensuring http://vod.cineplexbd.net:8081
- * is verified as the primary streaming source before attempting third-party fallbacks.
- */
-function getPrioritizedCandidates(
-  source: PlayableSource,
-  item: LibraryTitle,
-  season?: number,
-  episode?: number,
-): StreamCandidate[] {
-  const isSourceIsp =
-    source.url.includes("vod.cineplexbd.net") ||
-    source.url.includes("cineplexbd.net") ||
-    source.url.includes(":8081");
-
-  const ispCandidates = buildIspCandidates(item, season, episode);
-
-  const fallbackCandidate: StreamCandidate = {
-    url: source.url,
+  return [{
+    url: playbackUrl,
     kind: source.kind,
-    label: source.label || "Third-party Fallback Source",
+    label: source.label,
     isIsp: false,
-  };
-
-  if (isSourceIsp) {
-    const explicitIsp: StreamCandidate = {
-      url: source.url,
-      kind: source.kind,
-      label: source.label || "ISP CDN (vod.cineplexbd.net:8081)",
-      isIsp: true,
-    };
-    const explicitProxy: StreamCandidate = {
-      url: `/api/media-proxy?url=${encodeURIComponent(source.url)}`,
-      kind: source.kind,
-      label: "ISP CDN Proxy (vod.cineplexbd.net:8081)",
-      isIsp: true,
-    };
-    return [explicitIsp, explicitProxy, ...ispCandidates, fallbackCandidate];
-  }
-
-  // Strictly check ISP CDN first before third-party fallbacks
-  return [...ispCandidates, fallbackCandidate];
+  }];
 }
 
 export default function NativeMediaPlayer({
@@ -214,15 +61,57 @@ export default function NativeMediaPlayer({
   onEnded,
 }: NativeMediaPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const failedRef = useRef(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const errorCallback = useRef(onFatalError);
   const endedCallback = useRef(onEnded);
   const itemRef = useRef({ item, season, episode });
   const lastProgressWrite = useRef(0);
   const [candidateIndex, setCandidateIndex] = useState(0);
 
-  const candidates = getPrioritizedCandidates(source, item, season, episode);
+  const candidates = useMemo(() => getPrioritizedCandidates(source),
+    [source.url, source.playbackUrl, source.kind, source.label]);
   const currentCandidate =
     candidates[Math.min(candidateIndex, candidates.length - 1)];
+
+  useEffect(() => {
+    const onChange = () => {
+      const entered = document.fullscreenElement === containerRef.current;
+      setIsFullscreen(entered);
+      if (!entered && screen.orientation?.unlock) {
+        try { screen.orientation.unlock(); } catch { /* Browser may disallow unlock. */ }
+      }
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    const element = containerRef.current;
+    if (!element) return;
+    try {
+      if (document.fullscreenElement === element) {
+        await document.exitFullscreen();
+        return;
+      }
+      if (element.requestFullscreen) {
+        await element.requestFullscreen();
+        // A best-effort lock: only supported browsers permit landscape locking.
+        try {
+          const orientation = screen.orientation as ScreenOrientation & {
+            lock?: (value: "landscape") => Promise<void>;
+          };
+          await orientation?.lock?.("landscape");
+        } catch { /* No orientation permission. */ }
+      } else {
+        const legacyVideo = videoRef.current as (HTMLVideoElement & {
+          webkitEnterFullscreen?: () => void;
+        }) | null;
+        legacyVideo?.webkitEnterFullscreen?.();
+      }
+    } catch { /* Fullscreen is optional; native controls remain available. */ }
+  };
 
   useEffect(() => {
     errorCallback.current = onFatalError;
@@ -235,13 +124,15 @@ export default function NativeMediaPlayer({
     if (!video || !currentCandidate) return;
 
     let destroyed = false;
+    failedRef.current = false;
     let hls: import("hls.js").default | null = null;
 
     const handleCandidateFail = () => {
       if (destroyed) return;
       if (candidateIndex + 1 < candidates.length) {
         setCandidateIndex((idx) => idx + 1);
-      } else {
+      } else if (!failedRef.current) {
+        failedRef.current = true;
         errorCallback.current();
       }
     };
@@ -308,7 +199,7 @@ export default function NativeMediaPlayer({
     : undefined;
 
   return (
-    <div className="relative h-full w-full bg-black">
+    <div ref={containerRef} className={`relative w-full bg-black ${isFullscreen ? "h-screen" : "h-full"}`}>
       <video
         ref={videoRef}
         className="h-full w-full bg-black object-contain"
@@ -343,6 +234,8 @@ export default function NativeMediaPlayer({
           endedCallback.current?.();
         }}
         onError={() => {
+          if (failedRef.current) return;
+          failedRef.current = true;
           if (candidateIndex + 1 < candidates.length) {
             setCandidateIndex((idx) => idx + 1);
           } else {
@@ -354,7 +247,17 @@ export default function NativeMediaPlayer({
         Your browser cannot play this video.
       </video>
 
-      {/* Primary ISP CDN status indicator overlay */}
+      <button
+        type="button"
+        onClick={() => { void toggleFullscreen(); }}
+        aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen and rotate landscape when supported"}
+        title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+        className="absolute right-3 top-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/20 bg-black/50 text-white/90 backdrop-blur-md transition hover:bg-black/75"
+      >
+        {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+      </button>
+
+      {/* Optional source indicator for an explicitly validated ISP origin */}
       {currentCandidate?.isIsp && (
         <div className="pointer-events-none absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-black/70 px-2 py-1 text-[11px] font-semibold text-emerald-300 backdrop-blur-md">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />

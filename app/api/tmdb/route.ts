@@ -9,7 +9,7 @@ const ALLOWED = [
   /^\/(movie|tv)\/\d+\/watch\/providers$/,
   /^\/(movie|tv)\/\d+\/external_ids$/,
   /^\/tv\/\d+\/season\/\d+$/,
-  /^\/search\/multi$/,
+  /^\/search\/(multi|movie|tv)$/,
   /^\/discover\/(movie|tv)$/,
 ];
 

@@ -25,17 +25,18 @@ export default function Row({
 }) {
   const [items, setItems] = useState<Title[] | null>(null);
   const [error, setError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const paramsKey = JSON.stringify(params);
   const scroller = useRef<HTMLDivElement>(null);
   const drag = useRef({ down: false, x: 0, left: 0, moved: false });
 
   useEffect(() => {
     const ac = new AbortController();
-    tmdb<{ results: Title[] }>(path, params, ac.signal)
-      .then((d) => setItems(d.results))
-      .catch((e) => e.name !== "AbortError" && setError(true));
+    tmdb<{ results: Title[] }>(path, JSON.parse(paramsKey) as Record<string, string>, ac.signal)
+      .then((d) => { setItems(d.results); setError(false); })
+      .catch((e) => { if (e.name !== "AbortError") setError(true); });
     return () => ac.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path]);
+  }, [path, paramsKey, retryCount]);
 
   const scrollBy = (dir: 1 | -1) =>
     scroller.current?.scrollBy({
@@ -60,7 +61,17 @@ export default function Row({
     drag.current.down = false;
   };
 
-  if (error) return null;
+  if (error) return (
+    <section aria-label={title} className="px-4 py-6 sm:px-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-surface p-4">
+        <p className="text-sm text-white/75">{title} could not load.</p>
+        <button type="button" onClick={() => { setItems(null); setError(false); setRetryCount((n) => n + 1); }}
+          className="rounded-lg border border-white/20 px-3 py-2 text-xs font-semibold text-accent hover:bg-white/10">
+          Retry catalog
+        </button>
+      </div>
+    </section>
+  );
 
   const shown = (items ?? [])
     .filter((i) => (variant === "wide" ? i.backdrop_path : i.poster_path))
