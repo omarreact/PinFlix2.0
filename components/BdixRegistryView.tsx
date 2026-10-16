@@ -51,7 +51,7 @@ export default function BdixRegistryView() {
 
   useEffect(() => {
     const ac = new AbortController();
-    void reload(ac.signal);
+    void Promise.resolve().then(() => { if (!ac.signal.aborted) return reload(ac.signal); });
     return () => ac.abort();
   }, [reload]);
 
