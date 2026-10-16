@@ -561,12 +561,12 @@ export default function VideoPlayer({
             <div className="flex items-center gap-2">
               <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="font-semibold text-emerald-300">
-                BDIX Peering: vod.cineplexbd.net:8081
+                BDIX directory reference (unverified)
               </span>
               <span className="text-[11px] text-zinc-400">
-                {bdixStatus?.reachable
-                  ? `(${bdixStatus.latencyMs}ms local RTT · Unmetered)`
-                  : "(Primary ISP CDN)"}
+                {bdixStatus?.status === "reachable"
+                  ? "(" + bdixStatus.latencyMs + " ms verified health)"
+                  : bdixStatus?.reason ? "(" + bdixStatus.reason + ")" : "(HTTP endpoint cannot be verified from HTTPS)"}
               </span>
             </div>
             <button
@@ -576,7 +576,7 @@ export default function VideoPlayer({
               className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
             >
               <Activity size={12} />
-              {probingBdix ? "Testing..." : bdixStatus?.reachable ? "Retest BDIX Ping" : "Ping BDIX"}
+              {probingBdix ? "Checking…" : "Check availability"}
             </button>
           </div>
 

@@ -1,0 +1,25 @@
+name: PinFlix BDIX directory import validation
+on:
+  push:
+    branches: [main, "feat/**"]
+    paths:
+      - 'lib/bdix-registry.ts'
+      - 'scripts/bdix-import.mjs'
+      - '.github/workflows/bdix-import-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Import public references (no media or network scans)
+        run: node --experimental-strip-types scripts/bdix-import.mjs /tmp/pinflix-bdix-directory.json
+      - name: Validate provenance and deny-by-default source flags
+        run: |
+          node -e 'const d=require("/tmp/pinflix-bdix-directory.json");if(d.total<500||d.total>2500||d.items.some(x=>x.status!=="unverified"||x.rights!=="unknown"||x.approvedForPlayback||x.approvedForCrawler))process.exit(1); console.log("Verified",d.total,"unverified references; zero activated streams")'

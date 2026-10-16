@@ -12,6 +12,7 @@ export const LINKS = [
   { href: "/browse/movie", label: "Movies" },
   { href: "/browse/tv", label: "TV Shows" },
   { href: "/my-list", label: "My List" },
+  { href: "/bdix", label: "BDIX Sources" },
 ];
 
 export function Logo() {

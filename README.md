@@ -137,3 +137,37 @@ watch-provider listings direct users to legitimate third-party services.
 This product uses the TMDB API but is not endorsed or certified by TMDB.
 Provider availability data originates from TMDB/JustWatch and may differ by
 country and subscription.
+
+
+## BDIX source intelligence
+
+PinFlix now includes /bdix and GET /api/bdix/sources, which ingest public
+candidate references from TelepathyVijay/bdix-ftp-server/FTP_List.md.
+Google Sites authuser=0 is a duplicate of the same directory, not another feed.
+All entries are always UNVERIFIED with rights UNKNOWN and playback DISABLED.
+This is not a list of licensed or playable movies. It does not change
+the current /api/media/master licensed playback resolver.
+
+The browser probe module only checks operator-approved HTTPS, CORS-readable
+JSON health endpoints. The previous no-cors technique could yield false positives.
+Set NEXT_PUBLIC_BDIX_HEALTH_HOSTS and NEXT_PUBLIC_BDIX_HEALTH_URLS if you
+have health endpoints under your control. HTTP and private-IP references are
+not silently probed.
+
+Metadata import tools (Node.js 22+, operator-run):
+
+1. node --experimental-strip-types scripts/bdix-import.mjs registry.json
+   Fetch the published list and export a deduplicated inventory (no scanning).
+2. BDIX_CRAWLER_RIGHTS_CONFIRMED=true BDIX_CRAWLER_ALLOWED_HOSTS=cdn.example.org
+   node --experimental-strip-types services/bdix-crawler/scan.mjs
+   https://cdn.example.org/approved/ filenames.json
+   Crawl only an approved HTTPS Type-A directory, with request, depth and
+   rate limits. Index filenames, not media bytes. Respect robots policies.
+3. TMDB_READ_ACCESS_TOKEN=... node --experimental-strip-types
+   services/bdix-crawler/enrich.mjs filenames.json review.json
+   Build TMDB matching suggestions for manual review. No playback approval.
+
+The import scripts do not automatically persist to Firestore, schedule network
+crawls, or activate streams. A separately authorized, BDIX-connected
+HTTPS gateway may still be required for HTTP media, proper byte-range delivery,
+HLS playlists/segments, and browser CORS. Do not infer stream URLs from TMDB.
